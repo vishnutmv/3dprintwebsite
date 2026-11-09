@@ -146,7 +146,7 @@ function handle_commerce(string $path, array $parts): bool
         header('Cache-Control: public, max-age=30, stale-while-revalidate=120');
         respond(200, ['products' => array_map('product_out', $rows)]);
     }
-    if ($path === 'products' && count($parts) === 2 && $method === 'GET') {
+    if (($parts[0] ?? '') === 'products' && count($parts) === 2 && $method === 'GET') {
         $id = $parts[1];
         $column = preg_match('/^[0-9a-f-]{36}$/i', $id) ? 'id' : 'slug';
         $row = one("SELECT * FROM products WHERE is_active=1 AND $column=?", [$id]);
@@ -255,7 +255,7 @@ function handle_commerce(string $path, array $parts): bool
         respond(201, ['order' => mapped_details($details), 'session' => $session]);
     }
 
-    if ($path === 'orders' && count($parts) === 2 && $method === 'GET') {
+    if (($parts[0] ?? '') === 'orders' && count($parts) === 2 && $method === 'GET') {
         rate_limit('order-read', 60, 60);
         $code = strtoupper(text_value($_GET['code'] ?? '', 32));
         if ($code === '') fail(403, 'A customer code is required to view this order.');
@@ -264,7 +264,7 @@ function handle_commerce(string $path, array $parts): bool
         respond(200, ['order' => mapped_details($details)]);
     }
 
-    if ($path === 'customers' && count($parts) === 3 && $parts[2] === 'orders' && $method === 'GET') {
+    if (($parts[0] ?? '') === 'customers' && count($parts) === 3 && $parts[2] === 'orders' && $method === 'GET') {
         rate_limit('customer-orders', 30, 60);
         $code = strtoupper($parts[1]);
         if (!preg_match('/^3DP-[A-Z0-9]{4}-[A-Z0-9]{4}$/', $code)) fail(404, 'Customer not found.');
