@@ -135,7 +135,8 @@ function prize_out(array $row, bool $public = false): array
     ];
     if (!$public) {
         $result['tier'] = $row['prize_type'];
-        if ($row['voucher_code']) $result['voucherCode'] = $row['voucher_code'];
+        $voucherCode = $row['voucher_code'] ?? null;
+        if ($voucherCode) $result['voucherCode'] = $voucherCode;
         $result['active'] = (bool)$row['is_active'];
         $result['createdAt'] = $row['created_at'];
         $result['updatedAt'] = $row['updated_at'];
