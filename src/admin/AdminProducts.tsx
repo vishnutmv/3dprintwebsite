@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Boxes,
   Eye,
@@ -408,21 +409,28 @@ export function AdminProducts() {
       </div>
 
       {editing && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-ink-950/80 p-3 backdrop-blur-sm">
-          <div className="glass-deep max-h-[92vh] w-full max-w-[900px] overflow-y-auto rounded-3xl p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[18px]">{editing === "new" ? "New product" : "Edit product"}</h2>
-              <button
-                type="button"
-                onClick={() => setEditing(null)}
-                className="grid h-8 w-8 place-items-center rounded-lg text-white/50 hover:bg-white/10 hover:text-white"
-                aria-label="Close editor"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+        createPortal(
+          <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-ink-950/80 p-3 backdrop-blur-sm">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="product-editor-title"
+              className="glass-deep flex max-h-[calc(100vh-1.5rem)] w-full max-w-[900px] flex-col overflow-hidden rounded-3xl"
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-4">
+                <h2 id="product-editor-title" className="text-[18px]">{editing === "new" ? "New product" : "Edit product"}</h2>
+                <button
+                  type="button"
+                  onClick={() => setEditing(null)}
+                  className="grid h-8 w-8 place-items-center rounded-lg text-white/50 hover:bg-white/10 hover:text-white"
+                  aria-label="Close editor"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
-            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_320px]">
+              <div className="min-h-0 overflow-y-auto p-5">
+                <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className="label" htmlFor="p-name">Name</label>
@@ -594,19 +602,22 @@ export function AdminProducts() {
                   </p>
                 </div>
               </div>
-            </div>
+                </div>
+              </div>
 
-            <div className="mt-5 flex items-center justify-end gap-2 border-t border-white/10 pt-4">
-              <button type="button" className="btn-ghost" onClick={() => setEditing(null)} disabled={saving}>
-                Cancel
-              </button>
-              <button type="button" className="btn-primary" onClick={() => void save()} disabled={saving || uploading !== null}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Boxes className="h-4 w-4" />}
-                {editing === "new" ? "Create product" : "Save changes"}
-              </button>
+              <div className="flex shrink-0 items-center justify-end gap-2 border-t border-white/10 px-5 py-4">
+                <button type="button" className="btn-ghost" onClick={() => setEditing(null)} disabled={saving}>
+                  Cancel
+                </button>
+                <button type="button" className="btn-primary" onClick={() => void save()} disabled={saving || uploading !== null}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Boxes className="h-4 w-4" />}
+                  {editing === "new" ? "Create product" : "Save changes"}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
+          </div>,
+          document.body,
+        )
       )}
     </div>
   );
