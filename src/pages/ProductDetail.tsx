@@ -17,7 +17,7 @@ export function ProductDetail() {
   const cart = useStore((state) => state.cart);
   const addToCart = useStore((state) => state.addToCart);
   const [activeImage, setActiveImage] = useState(0);
-  const [showVideo, setShowVideo] = useState(false);
+  const [activeMedia, setActiveMedia] = useState<"image" | "video" | "model">("model");
 
   const product = products.find((candidate) => candidate.slug === slug);
 
@@ -41,6 +41,8 @@ export function ProductDetail() {
 
   const inCart = cart.find((item) => item.productId === product.id)?.qty ?? 0;
   const images = product.images?.length ? product.images : product.imageUrl ? [product.imageUrl] : [];
+  const activeMediaView =
+    activeMedia === "model" && !product.modelUrl && images.length > 0 ? "image" : activeMedia;
   const specs: { label: string; value: string }[] = [
     { label: "Size", value: product.dimensions || "—" },
     { label: "Print time", value: product.printTime || "—" },
@@ -63,13 +65,15 @@ export function ProductDetail() {
         {/* Media / viewer */}
         <div className="glass liquid-edge relative overflow-hidden rounded-[2rem] p-4">
           <div className="hero-grid pointer-events-none absolute inset-0 opacity-60" />
-          {showVideo && product.videoUrl ? (
+          {activeMediaView === "video" && product.videoUrl ? (
             <video
               src={product.videoUrl}
               controls
               autoPlay
               className="relative h-[420px] w-full rounded-2xl bg-black object-contain"
             />
+          ) : activeMediaView === "model" && product.modelUrl ? (
+            <ModelViewer product={product} className="relative h-[420px] w-full" />
           ) : images.length > 0 ? (
             <img
               src={images[Math.min(activeImage, images.length - 1)]}
@@ -86,7 +90,15 @@ export function ProductDetail() {
               {product.modelUrl ? "Uploaded model" : "Studio preview"}
             </span>
             <span className="text-[10.5px] uppercase tracking-[0.16em] text-white/35">
-              {showVideo ? "Product video" : images.length > 0 ? "Product photo" : "Drag to rotate · scroll to zoom"}
+              {activeMediaView === "video" && product.videoUrl
+                ? "Product video"
+                : activeMediaView === "image" && images.length > 0
+                  ? "Product photo"
+                  : product.modelUrl
+                    ? "Drag to rotate · scroll to zoom"
+                    : images.length > 0
+                      ? "Product photo"
+                      : "Drag to rotate · scroll to zoom"}
             </span>
           </div>
 
@@ -97,11 +109,11 @@ export function ProductDetail() {
                   key={url}
                   type="button"
                   onClick={() => {
-                    setShowVideo(false);
+                    setActiveMedia("image");
                     setActiveImage(index);
                   }}
                   className={`h-14 w-14 overflow-hidden rounded-xl border transition ${
-                    !showVideo && activeImage === index
+                    activeMediaView === "image" && activeImage === index
                       ? "border-violet-400"
                       : "border-white/10 opacity-70 hover:opacity-100"
                   }`}
@@ -113,9 +125,9 @@ export function ProductDetail() {
               {product.videoUrl && (
                 <button
                   type="button"
-                  onClick={() => setShowVideo(true)}
+                  onClick={() => setActiveMedia("video")}
                   className={`grid h-14 w-14 place-items-center rounded-xl border transition ${
-                    showVideo ? "border-violet-400 text-violet-200" : "border-white/10 text-white/60"
+                    activeMedia === "video" ? "border-violet-400 text-violet-200" : "border-white/10 text-white/60"
                   }`}
                   aria-label="Play product video"
                 >
@@ -125,9 +137,9 @@ export function ProductDetail() {
               {product.modelUrl && (
                 <button
                   type="button"
-                  onClick={() => setShowVideo(false)}
+                  onClick={() => setActiveMedia("model")}
                   className={`grid h-14 w-14 place-items-center rounded-xl border transition ${
-                    !showVideo && images.length === 0
+                    activeMediaView === "model"
                       ? "border-violet-400 text-violet-200"
                       : "border-white/10 text-white/60"
                   }`}
