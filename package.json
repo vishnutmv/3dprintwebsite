@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port 5180",
     "build": "npm run typecheck && vite build",
+    "build:vercel": "tsc --noEmit && vite build",
     "preview": "vite preview --port 5181",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.api.json",
     "typecheck:api": "tsc -p tsconfig.api.json"
