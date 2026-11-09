@@ -1,0 +1,11 @@
+node_modules
+dist
+web.zip
+acli.exe
+*.pem
+functions
+migrations
+wrangler.toml
+.dev.vars*
+.wrangler
+api/**

@@ -1,0 +1,21 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # API URLs are dispatched by the PHP front controller.
+  RewriteRule ^api/index\.php$ - [L]
+  RewriteRule ^api/?$ api/index.php [QSA,L]
+  RewriteRule ^api/(.*)$ api/index.php?route=$1 [QSA,L]
+
+  # Serve existing files directly and use the React entry point for SPA routes.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
