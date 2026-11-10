@@ -1,7 +1,7 @@
 ALTER TABLE whatsapp_leads
   ADD COLUMN customer_id CHAR(36) NULL AFTER phone_e164,
   ADD COLUMN last_admin_reply_at DATETIME NULL AFTER last_auto_reply_at,
-  ADD COLUMN auto_followup_due_at DATETIME NULL AFTER auto_followup_attempted_at,
+  ADD COLUMN auto_followup_due_at DATETIME NULL AFTER auto_reply_attempted_at,
   ADD COLUMN auto_followup_sent_at DATETIME NULL AFTER auto_followup_due_at,
   ADD COLUMN converted_at DATETIME NULL AFTER auto_followup_sent_at,
   ADD COLUMN conversion_order_id CHAR(36) NULL AFTER converted_at,
@@ -12,7 +12,7 @@ ALTER TABLE whatsapp_leads
   ADD CONSTRAINT fk_whatsapp_leads_conversion_order
     FOREIGN KEY (conversion_order_id) REFERENCES orders(id) ON DELETE SET NULL;
 
-CREATE TABLE whatsapp_messages (
+CREATE TABLE IF NOT EXISTS whatsapp_messages (
   id CHAR(36) NOT NULL PRIMARY KEY,
   lead_id CHAR(36) NOT NULL,
   provider_message_id VARCHAR(128) NULL,
@@ -29,4 +29,8 @@ CREATE TABLE whatsapp_messages (
 INSERT INTO whatsapp_messages (id, lead_id, direction, message_type, body, created_at)
 SELECT UUID(), id, 'inbound', 'chat', last_message, last_message_at
 FROM whatsapp_leads
-WHERE last_message <> '';
+WHERE last_message <> ''
+  AND NOT EXISTS (
+    SELECT 1 FROM whatsapp_messages
+    WHERE whatsapp_messages.lead_id = whatsapp_leads.id
+  );
