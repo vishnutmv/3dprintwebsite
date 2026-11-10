@@ -17,14 +17,5 @@ export default defineConfig({
   build: {
     target: "es2020",
     chunkSizeWarningLimit: 1400,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return undefined;
-          if (/node_modules[\\/](three|@react-three)/.test(id)) return "three";
-          return "vendor";
-        },
-      },
-    },
   },
 });
