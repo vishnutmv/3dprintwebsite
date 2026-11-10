@@ -39,6 +39,9 @@ export type AdminLead = {
   lastMessageAt: string;
   status: "new" | "active" | "closed";
   isBusinessEnquiry: boolean;
+  isExistingCustomer: boolean;
+  enquiryInterest: string;
+  detailsRequestedAt: string | null;
   createdAt: string;
   updatedAt: string;
   chatUrl: string;
@@ -114,6 +117,8 @@ export type AdminInsights = {
 
 export type AdminPrize = Prize & {
   active: boolean;
+  quantity: number;
+  availableQuantity?: number;
   createdAt?: string;
   updatedAt?: string;
   awardedToName?: string;
@@ -191,11 +196,36 @@ export type PrizeInput = {
   prizeType?: string;
   voucherCode?: string | null;
   worth?: number;
+  quantity?: number;
   sponsor?: string;
   cycle?: string;
   mediaUrls?: string[];
   active?: boolean;
   status?: string;
+};
+
+export type AdminCollaboratorOffer = {
+  id: string;
+  collaboratorId: string;
+  prizeId: string;
+  rewardName: string;
+  rewardType: "cashback" | "percentage_discount" | "fixed_discount" | "product" | "other";
+  rewardValue: number;
+  quantity: number;
+  terms: string;
+  createdAt: string;
+};
+
+export type AdminCollaborator = {
+  id: string;
+  name: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  notes: string;
+  active: boolean;
+  createdAt?: string;
+  offers: AdminCollaboratorOffer[];
 };
 
 export type MediaFile = {
@@ -405,6 +435,40 @@ export async function assignPrize(input: {
     input,
   );
   return response.assignment;
+}
+
+export async function getCollaborators(): Promise<AdminCollaborator[]> {
+  const response = await adminGet<{ collaborators: AdminCollaborator[] }>("/api/admin/collaborators");
+  return response.collaborators;
+}
+
+export async function createCollaborator(input: Pick<AdminCollaborator, "name" | "contactName" | "email" | "phone" | "notes">): Promise<AdminCollaborator> {
+  const response = await adminPost<{ collaborator: AdminCollaborator }>("/api/admin/collaborators", input);
+  return response.collaborator;
+}
+
+export async function updateCollaborator(
+  id: string,
+  input: Partial<Pick<AdminCollaborator, "name" | "contactName" | "email" | "phone" | "notes" | "active">>,
+): Promise<AdminCollaborator> {
+  const response = await adminPatch<{ collaborator: AdminCollaborator }>(`/api/admin/collaborators/${encodeURIComponent(id)}`, input);
+  return response.collaborator;
+}
+
+export async function createCollaboratorOffer(
+  id: string,
+  input: Pick<AdminCollaboratorOffer, "rewardName" | "rewardType" | "rewardValue" | "quantity" | "terms">,
+): Promise<AdminCollaboratorOffer> {
+  const response = await adminPost<{ offer: AdminCollaboratorOffer }>(`/api/admin/collaborators/${encodeURIComponent(id)}/offers`, input);
+  return response.offer;
+}
+
+export async function updateCollaboratorOffer(
+  id: string,
+  input: Partial<Pick<AdminCollaboratorOffer, "rewardName" | "rewardType" | "rewardValue" | "quantity" | "terms">>,
+): Promise<AdminCollaboratorOffer> {
+  const response = await adminPatch<{ offer: AdminCollaboratorOffer }>(`/api/admin/collaborator-offers/${encodeURIComponent(id)}`, input);
+  return response.offer;
 }
 
 /* ---------------------------- Settings ----------------------------- */

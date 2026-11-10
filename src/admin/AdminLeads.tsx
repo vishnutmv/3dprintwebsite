@@ -159,6 +159,11 @@ export function AdminLeads() {
                       {lead.customer.marketingOptIn ? " · marketing consent on file" : ""}
                     </p>
                   )}
+                  {lead.isExistingCustomer && (
+                    <p className="mt-1 text-[10.5px] font-medium text-mint">
+                      Existing customer · excluded from new lead conversions
+                    </p>
+                  )}
                 </div>
                 <p className="text-[10.5px] text-white/35">{dateTime(lead.lastMessageAt)}</p>
               </div>
@@ -166,6 +171,19 @@ export function AdminLeads() {
               <p className="mt-4 whitespace-pre-wrap break-words rounded-2xl border border-white/8 bg-black/20 p-3 text-[12px] leading-relaxed text-white/70">
                 {lead.lastMessage}
               </p>
+              {lead.isBusinessEnquiry && (
+                <div className="mt-3 rounded-xl border border-mint/10 bg-mint/[0.04] px-3 py-2.5">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-mint/70">Enquiry details</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-white/65">
+                    {lead.enquiryInterest || "Interest not yet provided"}
+                  </p>
+                  {lead.detailsRequestedAt && (
+                    <p className="mt-1 text-[9.5px] text-white/35">
+                      Details requested {dateTime(lead.detailsRequestedAt)}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <p className="mt-2 text-[10px] text-white/35">
                 Latest activity {dateTime(lead.lastMessageAt)}

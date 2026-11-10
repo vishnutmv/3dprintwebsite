@@ -13,6 +13,7 @@ import { AdminOrders } from "./admin/AdminOrders";
 import { AdminCustomers } from "./admin/AdminCustomers";
 import { AdminLeads } from "./admin/AdminLeads";
 import { AdminPrizes } from "./admin/AdminPrizes";
+import { AdminCollaborators } from "./admin/AdminCollaborators";
 import { AdminSettings } from "./admin/AdminSettings";
 import { AdminCampaigns } from "./admin/AdminCampaigns";
 import { AdminInsights } from "./admin/AdminInsights";
@@ -57,6 +58,7 @@ const router = createBrowserRouter([
       { path: "customers", element: <AdminCustomers /> },
       { path: "leads", element: <AdminLeads /> },
       { path: "prizes", element: <AdminPrizes /> },
+      { path: "collaborators", element: <AdminCollaborators /> },
       { path: "insights", element: <AdminInsights /> },
       { path: "campaigns", element: <AdminCampaigns /> },
       { path: "settings", element: <AdminSettings /> },

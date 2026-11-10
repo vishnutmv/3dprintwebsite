@@ -22,6 +22,7 @@ type PrizeForm = {
   prizeType: string;
   voucherCode: string;
   worth: string;
+  quantity: string;
   sponsor: string;
   cycle: string;
 };
@@ -32,6 +33,7 @@ const emptyPrize: PrizeForm = {
   prizeType: "regular",
   voucherCode: "",
   worth: "0",
+  quantity: "1",
   sponsor: "",
   cycle: "",
 };
@@ -83,11 +85,11 @@ export function AdminPrizes() {
   const message = useMemo(() => {
     if (!selectedPrize || !selectedCustomer) return "";
     return [
-      `Hi ${selectedCustomer.name.split(" ")[0]}, you've been awarded ${selectedPrize.title}.`,
+      `Hi ${selectedCustomer.name.split(" ")[0]}, a reward card from 3D Print Co. is ready for you.`,
       "",
-      `Customer ID: ${selectedCustomer.customerCode}`,
-      `Prize value: ${inr(selectedPrize.worth)}${selectedPrize.sponsor ? ` (sponsored by ${selectedPrize.sponsor})` : ""}`,
-      selectedPrize.voucherCode ? `Voucher code: ${selectedPrize.voucherCode}` : "",
+      `Reward: ${selectedPrize.title}`,
+      "Scratch the private card link in the WhatsApp message to reveal the reward.",
+      "The reward can only be revealed once.",
       "",
       "— 3D Print Co.",
     ].filter(Boolean).join("\n");
@@ -100,11 +102,17 @@ export function AdminPrizes() {
       toast("Enter a prize title and a valid value.", "warn");
       return;
     }
+    const quantity = Number(form.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100000) {
+      toast("Enter a valid prize quantity between 1 and 100000.", "warn");
+      return;
+    }
     setSaving(true);
     try {
       await createPrize({
         ...form,
         worth: Math.round(worthRupees * 100),
+        quantity,
         voucherCode: form.voucherCode.trim() || null,
       });
       setForm(emptyPrize);
@@ -223,6 +231,10 @@ export function AdminPrizes() {
               <input id="prize-worth" className="field" type="number" min="0" step="0.01" value={form.worth} onChange={(event) => setForm({ ...form, worth: event.target.value })} />
             </div>
             <div>
+              <label className="label" htmlFor="prize-quantity">Available quantity</label>
+              <input id="prize-quantity" className="field" type="number" min="1" step="1" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} />
+            </div>
+            <div>
               <label className="label" htmlFor="prize-sponsor">Partner / sponsor</label>
               <input id="prize-sponsor" className="field" value={form.sponsor} onChange={(event) => setForm({ ...form, sponsor: event.target.value })} />
             </div>
@@ -257,8 +269,10 @@ export function AdminPrizes() {
                 <div>
                   <label className="label" htmlFor="award-prize">Prize</label>
                   <select id="award-prize" className="field" value={prizeId} onChange={(event) => setPrizeId(event.target.value)}>
-                    {prizes.filter((prize) => prize.status === "open" && prize.active).map((prize) => (
-                      <option key={prize.id} value={prize.id} className="bg-ink-900">{prize.title} · {inr(prize.worth)}</option>
+                    {prizes.filter((prize) => prize.status === "open" && prize.active && (prize.availableQuantity ?? prize.quantity) > 0).map((prize) => (
+                      <option key={prize.id} value={prize.id} className="bg-ink-900">
+                        {prize.title} · {prize.worth > 0 ? inr(prize.worth) : prize.description?.split("·")[0] || "Reward"} · {prize.availableQuantity ?? prize.quantity} left
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -310,7 +324,10 @@ export function AdminPrizes() {
                     <p className="text-[13.5px] font-semibold text-white">{prize.title}</p>
                   </div>
                   <p className="mt-1 text-[11px] text-white/40">
-                    {prize.sponsor || "No partner"} · {prize.cycle || "No campaign"} · {inr(prize.worth)}
+                    {prize.sponsor || "No partner"} · {prize.cycle || "No campaign"} · {prize.worth > 0 ? inr(prize.worth) : prize.description || "Reward"}
+                  </p>
+                  <p className="mt-1 text-[10px] text-white/35">
+                    {prize.availableQuantity ?? prize.quantity} of {prize.quantity} available
                   </p>
                   {prize.awardedTo && (
                     <p className="mt-2 font-mono text-[11px] text-violet-200/80">

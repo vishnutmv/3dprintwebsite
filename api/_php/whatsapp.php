@@ -95,10 +95,52 @@ function handle_whatsapp(string $path): bool
 
 function is_whatsapp_business_enquiry(string $message): bool
 {
-    return preg_match(
-        '~(?<![A-Za-z0-9])(?:@|/)?3dprintco(?![A-Za-z0-9])\s*[:,\-]?\s*.{2,}~isu',
+    $query = whatsapp_enquiry_query($message);
+    return $query !== null && (
+        whatsapp_query_matches_catalogue($query)
+        || preg_match('/\?|\b(help|enquir|question|need|want|looking|interested|quote|request|please|tell me|show me|send me|share|what|how|where|when|who|can i|can you|could you|do you|is there|are there)\b/i', $query) === 1
+    );
+}
+
+function whatsapp_enquiry_query(string $message): ?string
+{
+    $matched = preg_match(
+        '~(?<![\p{L}\p{N}])(?:[@/]\s*)?3\s*d\s*print\s*co(?:mpany)?\.?(?![\p{L}\p{N}])'
+        . '\s*(?:[,:\-]\s*)?(.+)$~isu',
         $message,
+        $match,
+    );
+    if ($matched !== 1) return null;
+    $query = trim((string)$match[1], " \t\n\r\0\x0B,.:;!?-–—");
+    return mb_strlen($query) >= 2 ? $query : null;
+}
+
+function whatsapp_query_matches_catalogue(string $query): bool
+{
+    return preg_match(
+        '/\b(product|price|cost|catalog(?:ue)?|print(?:ing)?|custom|order|model|item|delivery|shipping|available|buy|purchase|how much|design)\b/i',
+        $query,
     ) === 1;
+}
+
+function whatsapp_phone_from_message(string $message): ?string
+{
+    if (!preg_match('/(?<!\d)(?:\+?91[\s.-]?)?0?[6-9]\d{9}(?!\d)/', $message, $match)) return null;
+    $digits = preg_replace('/\D/', '', $match[0]);
+    if (strlen((string)$digits) === 11 && str_starts_with((string)$digits, '0')) $digits = substr((string)$digits, 1);
+    if (strlen((string)$digits) === 10) $digits = '91' . $digits;
+    return preg_match('/^91[6-9]\d{9}$/', (string)$digits) ? (string)$digits : null;
+}
+
+function whatsapp_name_from_message(string $message): ?string
+{
+    if (!preg_match(
+        '/(?:my name is|name\s*[:=-])\s*([\p{L}][\p{L} .\'-]{1,60}?)(?=\s+(?:and|i need|i want|looking|for|phone|mobile|my number)\b|[,;.!]|$)/iu',
+        $message,
+        $match,
+    )) return null;
+    $name = trim((string)$match[1]);
+    return mb_strlen($name) >= 2 ? $name : null;
 }
 
 function process_whatsapp_outbound_message(
@@ -174,6 +216,9 @@ function process_whatsapp_lead(
     bool $isBusinessEnquiry,
 ): void {
     $pdo = db();
+    if ($name === '') $name = whatsapp_name_from_message($message) ?? '';
+    if ($phone === null) $phone = whatsapp_phone_from_message($message);
+    $knownCustomer = $phone !== null ? find_customer_by_phone($phone) : null;
     $pdo->beginTransaction();
     try {
         if (
@@ -194,14 +239,16 @@ function process_whatsapp_lead(
         }
 
         $created = run(
-            'INSERT IGNORE INTO whatsapp_leads (id, chat_id, phone_e164, contact_name, last_message, last_message_at, status, is_business_enquiry, business_enquiry_at) '
-                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, IF(?, ?, NULL))',
+            'INSERT IGNORE INTO whatsapp_leads (id, chat_id, phone_e164, customer_id, contact_name, last_message, last_message_at, status, is_business_enquiry, is_existing_customer, business_enquiry_at, enquiry_interest) '
+                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, IF(?, ?, NULL), ?)',
             [
-                new_id(), $chatId, $phone, $name, $message, $receivedAt,
+                new_id(), $chatId, $phone, $knownCustomer['id'] ?? null, $name !== '' ? $name : ($knownCustomer['full_name'] ?? ''), $message, $receivedAt,
                 $isBusinessEnquiry ? 'new' : 'active',
                 $isBusinessEnquiry ? 1 : 0,
+                $knownCustomer ? 1 : 0,
                 $isBusinessEnquiry ? 1 : 0,
                 $receivedAt,
+                $isBusinessEnquiry ? whatsapp_enquiry_query($message) : null,
             ],
         )->rowCount() === 1;
         $existing = one('SELECT * FROM whatsapp_leads WHERE chat_id=? FOR UPDATE', [$chatId]);
@@ -209,20 +256,53 @@ function process_whatsapp_lead(
         $wasBusinessEnquiry = !$created && (bool)$existing['is_business_enquiry'];
         $isNewBusinessEnquiry = $isBusinessEnquiry && ($created || !$wasBusinessEnquiry);
         $status = $existing['status'];
-        if ($isBusinessEnquiry && !$wasBusinessEnquiry && empty($existing['last_admin_reply_at'])) $status = 'new';
+        if ($isBusinessEnquiry && !$wasBusinessEnquiry) $status = 'new';
         if ($isBusinessEnquiry && $existing['status'] === 'closed') $status = 'new';
         if (!$created) {
             run(
-                'UPDATE whatsapp_leads SET phone_e164=COALESCE(?, phone_e164), contact_name=IF(?<>"", ?, contact_name), '
+                'UPDATE whatsapp_leads SET phone_e164=COALESCE(?, phone_e164), customer_id=COALESCE(customer_id, ?), '
+                    . 'is_existing_customer=GREATEST(is_existing_customer, ?), '
+                    . 'contact_name=IF(?<>"", ?, contact_name), '
                     . 'last_message=IF(? >= last_message_at, ?, last_message), '
                     . 'last_message_at=GREATEST(last_message_at, ?), status=?, '
                     . 'is_business_enquiry=GREATEST(is_business_enquiry, ?), '
                     . 'business_enquiry_at=IF(?=1, COALESCE(business_enquiry_at, ?), business_enquiry_at), '
+                    . 'enquiry_interest=IF(?<>"", ?, enquiry_interest), '
                     . 'updated_at=CURRENT_TIMESTAMP WHERE id=?',
                 [
-                    $phone, $name, $name, $receivedAt, $message, $receivedAt, $status,
-                    $isBusinessEnquiry ? 1 : 0, $isBusinessEnquiry ? 1 : 0, $receivedAt, $existing['id'],
+                    $phone, $knownCustomer['id'] ?? null, $knownCustomer ? 1 : 0,
+                    $name !== '' ? $name : ($knownCustomer['full_name'] ?? ''),
+                    $name !== '' ? $name : ($knownCustomer['full_name'] ?? ''),
+                    $receivedAt, $message, $receivedAt, $status,
+                    $isBusinessEnquiry ? 1 : 0, $isBusinessEnquiry ? 1 : 0, $receivedAt,
+                    $isBusinessEnquiry ? (whatsapp_enquiry_query($message) ?? '') : '',
+                    $isBusinessEnquiry ? (whatsapp_enquiry_query($message) ?? '') : '',
+                    $existing['id'],
                 ],
+            );
+        } elseif ($knownCustomer && empty($existing['customer_id'])) {
+            run(
+                'UPDATE whatsapp_leads SET customer_id=?, is_existing_customer=1, '
+                    . 'contact_name=IF(contact_name="", ?, contact_name) WHERE id=?',
+                [$knownCustomer['id'], $knownCustomer['full_name'], $existing['id']],
+            );
+        }
+        if ($isBusinessEnquiry && $existing['details_requested_at'] === null) {
+            run(
+                'UPDATE whatsapp_leads SET details_requested_at=COALESCE(details_requested_at, UTC_TIMESTAMP()) WHERE id=?',
+                [$existing['id']],
+            );
+        } elseif (
+            !$isBusinessEnquiry
+            && (bool)$existing['is_business_enquiry']
+            && !preg_match('/^\s*(?:stop|unsubscribe|opt\s*out|remove\s*me)[.! ]*$/i', $message)
+        ) {
+            $detail = mb_substr(trim($message), 0, 1000);
+            $interest = trim((string)($existing['enquiry_interest'] ?? ''));
+            $interest = mb_substr($interest === '' ? $detail : $interest . "\n---\n" . $detail, -2500);
+            run(
+                'UPDATE whatsapp_leads SET enquiry_interest=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                [$interest, $existing['id']],
             );
         }
         if ($isBusinessEnquiry) {
@@ -269,7 +349,8 @@ function process_whatsapp_lead(
     }
 
     if ($isBusinessEnquiry && $lead['status'] === 'new' && claim_whatsapp_auto_reply((string)$lead['id'])) {
-        if (send_whatsapp_product_reply($chatId, $name)) {
+        $replyName = $name !== '' ? $name : (string)($knownCustomer['full_name'] ?? '');
+        if (send_whatsapp_product_reply($chatId, $replyName, (string)(whatsapp_enquiry_query($message) ?? ''), $phone)) {
             run(
                 'UPDATE whatsapp_leads SET last_auto_reply_at=UTC_TIMESTAMP(), auto_reply_attempted_at=NULL WHERE id=?',
                 [$lead['id']],
@@ -285,14 +366,14 @@ function claim_whatsapp_auto_reply(string $leadId): bool
     $result = run(
         'UPDATE whatsapp_leads SET auto_reply_attempted_at=UTC_TIMESTAMP() '
             . 'WHERE id=? AND status="new" '
-            . 'AND (last_auto_reply_at IS NULL OR last_auto_reply_at < UTC_TIMESTAMP() - INTERVAL 24 HOUR) '
+            . 'AND (last_auto_reply_at IS NULL OR last_auto_reply_at < UTC_TIMESTAMP() - INTERVAL 5 MINUTE) '
             . 'AND (auto_reply_attempted_at IS NULL OR auto_reply_attempted_at < UTC_TIMESTAMP() - INTERVAL 10 MINUTE)',
         [$leadId],
     );
     return $result->rowCount() === 1;
 }
 
-function send_whatsapp_product_reply(string $chatId, string $name): bool
+function send_whatsapp_product_reply(string $chatId, string $name, string $query, ?string $phone): bool
 {
     global $config;
     $token = (string)($config['waapi_api_token'] ?? '');
@@ -315,10 +396,24 @@ function send_whatsapp_product_reply(string $chatId, string $name): bool
         return false;
     }
     $shopUrl = rtrim($shopBase, '/') . '/shop';
-    $greeting = $name !== '' ? 'Hi ' . $name . "!\n\n" : "Hi!\n\n";
-    $body = $greeting . "Thanks for enquiring with 3D Print Co. Here are a few available products:\n";
-    $body .= $lines ? implode("\n", $lines) : "Our catalogue is being updated—please browse the shop for availability.\n";
-    $body .= "\n\nSee the full catalogue and current prices: " . $shopUrl;
+    $greeting = $name !== '' ? 'Hi ' . $name . ",\n\n" : "Hello,\n\n";
+    if (whatsapp_query_matches_catalogue($query)) {
+        $body = $greeting . "Thanks for contacting 3D Print Co. Here are a few available products:\n\n";
+        $body .= $lines ? implode("\n", $lines) : "Our catalogue is being updated.\n";
+        $body .= "\nBrowse the full catalogue and current prices:\n" . $shopUrl;
+    } else {
+        $body = $greeting . "Thanks for contacting 3D Print Co. I couldn't match that request to our catalogue automatically.\n\n";
+        $body .= "Please check our products and prices here:\n" . $shopUrl;
+    }
+    $body .= "\n\nTo help us follow up:";
+    if ($name === '') $body .= "\n- Your name";
+    $body .= "\n- The product or service you need";
+    if ($phone !== null) {
+        $body .= "\nWe received your WhatsApp number ending in " . substr($phone, -4) . '.';
+    } else {
+        $body .= "\n- A mobile number where we can reach you";
+    }
+    $body .= "\n\nA team member will review your enquiry.";
 
     $context = stream_context_create(['http' => [
         'method' => 'POST',
@@ -535,28 +630,61 @@ function find_customer_by_phone(string $phone): ?array
 {
     $digits = preg_replace('/\D/', '', $phone);
     if (!preg_match('/^\d{6,20}$/', (string)$digits)) return null;
-    $rows = all('SELECT id, full_name, phone FROM customers WHERE phone LIKE ? ORDER BY updated_at DESC LIMIT 50', ['%' . substr((string)$digits, -10) . '%']);
+    $candidates = whatsapp_phone_candidates((string)$digits);
+    $rows = all(
+        "SELECT id, full_name, phone FROM customers "
+        . "WHERE RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone,'+',''),' ',''),'-',''),'(',''),')',''),'.',''),10)=? "
+        . 'ORDER BY updated_at DESC',
+        [substr((string)$digits, -10)],
+    );
     foreach ($rows as $customer) {
-        if (preg_replace('/\D/', '', (string)$customer['phone']) === $digits) return $customer;
+        if (array_intersect($candidates, whatsapp_phone_candidates((string)preg_replace('/\D/', '', (string)$customer['phone'])))) return $customer;
     }
     return null;
+}
+
+function whatsapp_phone_candidates(string $digits): array
+{
+    $candidates = [$digits];
+    if (strlen($digits) === 10) $candidates[] = '91' . $digits;
+    if (strlen($digits) === 11 && $digits[0] === '0') $candidates[] = '91' . substr($digits, 1);
+    if (strlen($digits) === 12 && str_starts_with($digits, '91')) $candidates[] = substr($digits, 2);
+    return array_values(array_unique($candidates));
 }
 
 function link_whatsapp_leads_to_customer(string $customerId, string $phone, string $name, ?string $orderId = null): void
 {
     $digits = preg_replace('/\D/', '', $phone);
     if (!preg_match('/^\d{6,20}$/', (string)$digits)) return;
-    $candidates = [(string)$digits];
-    if (strlen((string)$digits) === 10) $candidates[] = '91' . $digits;
-    if (strlen((string)$digits) === 12 && str_starts_with((string)$digits, '91')) $candidates[] = substr((string)$digits, 2);
+    $candidates = whatsapp_phone_candidates((string)$digits);
     $placeholders = implode(',', array_fill(0, count($candidates), '?'));
-    $leads = all("SELECT id FROM whatsapp_leads WHERE phone_e164 IN ($placeholders)", $candidates);
+    $leads = all(
+        "SELECT id,converted_at FROM whatsapp_leads WHERE phone_e164 IN ($placeholders) AND is_business_enquiry=1 AND is_existing_customer=0 "
+        . 'ORDER BY (converted_at IS NOT NULL) DESC,business_enquiry_at ASC,created_at ASC',
+        $candidates,
+    );
+    $conversionLeadId = null;
     foreach ($leads as $lead) {
-        run(
-            'UPDATE whatsapp_leads SET customer_id=?, contact_name=IF(contact_name="", ?, contact_name), '
-                . 'converted_at=IF(? IS NULL, converted_at, COALESCE(converted_at, UTC_TIMESTAMP())), '
-                . 'conversion_order_id=COALESCE(conversion_order_id, ?), updated_at=CURRENT_TIMESTAMP WHERE id=?',
-            [$customerId, $name, $orderId, $orderId, $lead['id']],
-        );
+        if ($lead['converted_at'] !== null) {
+            $conversionLeadId = $lead['id'];
+            break;
+        }
+    }
+    if ($conversionLeadId === null && $orderId !== null && $leads) $conversionLeadId = $leads[0]['id'];
+    foreach ($leads as $lead) {
+        if ($lead['id'] === $conversionLeadId) {
+            run(
+                'UPDATE whatsapp_leads SET customer_id=?, contact_name=IF(contact_name="", ?, contact_name), '
+                    . 'converted_at=COALESCE(converted_at, UTC_TIMESTAMP()), conversion_order_id=COALESCE(conversion_order_id, ?), '
+                    . 'updated_at=CURRENT_TIMESTAMP WHERE id=? AND is_existing_customer=0',
+                [$customerId, $name, $orderId, $lead['id']],
+            );
+        } else {
+            run(
+                'UPDATE whatsapp_leads SET customer_id=?, contact_name=IF(contact_name="", ?, contact_name), '
+                    . 'is_existing_customer=1, updated_at=CURRENT_TIMESTAMP WHERE id=? AND is_existing_customer=0',
+                [$customerId, $name, $lead['id']],
+            );
+        }
     }
 }

@@ -144,17 +144,17 @@ function paid_order_whatsapp_text(array $details, string $paymentId): string
     $customer = $details['customer'];
     $itemLines = [];
     foreach (array_slice($details['items'], 0, 4) as $item) {
-        $itemLines[] = '│ ' . (int)$item['quantity'] . ' × ' . text_value($item['product_name'], 70);
+        $itemLines[] = '- ' . (int)$item['quantity'] . ' x ' . text_value($item['product_name'], 70);
     }
-    if (count($details['items']) > 4) $itemLines[] = '│ + more items';
+    if (count($details['items']) > 4) $itemLines[] = '- More items in your order';
     return 'Hi ' . text_value($customer['full_name'] ?? 'there', 100) . ",\n\n"
-        . "╭─ ✅ PAYMENT CONFIRMED\n"
-        . "│ Order: {$order['order_number']}\n"
-        . implode("\n", $itemLines) . "\n"
-        . "│ Total: ₹" . number_format((int)$order['total_amount'] / 100, 2) . "\n"
-        . "│ Payment: Razorpay\n"
-        . "│ Transaction: {$paymentId}\n"
-        . "╰─ Your order is confirmed and being prepared.\n\n"
+        . "PAYMENT CONFIRMED\n"
+        . "Order: {$order['order_number']}\n"
+        . "Items:\n" . implode("\n", $itemLines) . "\n\n"
+        . "Total: INR " . number_format((int)$order['total_amount'] / 100, 2) . "\n"
+        . "Payment method: Razorpay\n"
+        . "Transaction ID: {$paymentId}\n\n"
+        . "Your order is confirmed and being prepared.\n\n"
         . '— 3D Print Co.';
 }
 
@@ -172,16 +172,27 @@ function send_paid_order_whatsapp(array $details, string $paymentId): void
 function reveal_reward(string $token, bool $reveal): array
 {
     if (!preg_match('/^[a-f0-9]{64}$/i', $token)) fail(404, 'Reward not found.');
-    $assignment = one(
-        'SELECT cp.id,cp.revealed_at,p.title,p.description,p.worth,p.prize_type,p.sponsor,p.voucher_code '
-        . 'FROM customer_prizes cp JOIN prizes p ON p.id=cp.prize_id '
-        . 'WHERE cp.reveal_token=? AND cp.released_at IS NULL LIMIT 1',
-        [strtolower($token)],
-    );
-    if (!$assignment) fail(404, 'Reward not found or no longer active.');
-    if ($reveal && $assignment['revealed_at'] === null) {
-        run('UPDATE customer_prizes SET revealed_at=UTC_TIMESTAMP() WHERE id=? AND revealed_at IS NULL', [$assignment['id']]);
-        $assignment['revealed_at'] = gmdate('Y-m-d H:i:s');
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $assignment = one(
+            'SELECT cp.id,cp.revealed_at,p.title,p.description,p.worth,p.prize_type,p.sponsor,p.voucher_code '
+            . 'FROM customer_prizes cp JOIN prizes p ON p.id=cp.prize_id '
+            . 'WHERE cp.reveal_token=? AND cp.released_at IS NULL LIMIT 1 FOR UPDATE',
+            [strtolower($token)],
+        );
+        if (!$assignment) {
+            $pdo->rollBack();
+            fail(404, 'Reward not found or no longer active.');
+        }
+        if ($reveal && $assignment['revealed_at'] === null) {
+            run('UPDATE customer_prizes SET revealed_at=UTC_TIMESTAMP() WHERE id=? AND revealed_at IS NULL', [$assignment['id']]);
+            $assignment['revealed_at'] = gmdate('Y-m-d H:i:s');
+        }
+        $pdo->commit();
+    } catch (Throwable $error) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $error;
     }
     if ($assignment['revealed_at'] === null) return ['revealed' => false];
     return [
@@ -230,7 +241,12 @@ function handle_commerce(string $path, array $parts): bool
         respond(200, ['product' => product_out($row)]);
     }
     if ($path === 'prizes' && $method === 'GET') {
-        $rows = all('SELECT * FROM prizes WHERE is_active=1 AND status="open" ORDER BY worth DESC');
+        $rows = all(
+            'SELECT p.*, GREATEST(p.quantity-(SELECT COUNT(*) FROM customer_prizes cp WHERE cp.prize_id=p.id AND cp.released_at IS NULL),0) AS available_quantity '
+            . 'FROM prizes p WHERE p.is_active=1 AND p.status="open" '
+            . 'AND (SELECT COUNT(*) FROM customer_prizes cp WHERE cp.prize_id=p.id AND cp.released_at IS NULL)<p.quantity '
+            . 'AND NOT EXISTS (SELECT 1 FROM collaborator_offers co WHERE co.prize_id=p.id) ORDER BY p.worth DESC'
+        );
         respond(200, ['prizes' => array_map(static fn(array $r): array => prize_out($r, true), $rows)]);
     }
 

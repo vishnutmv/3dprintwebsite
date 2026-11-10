@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Gift, Loader2, Sparkles } from "lucide-react";
+import { Download, Gift, Loader2, Share2, Sparkles } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
 import { inr } from "@/lib/format";
+import { createRewardCardPdf, type RewardCardDetails } from "@/lib/invoice";
 
-type Reward = {
+type RewardResponse = {
   revealed: boolean;
   title?: string;
   description?: string;
@@ -12,6 +13,7 @@ type Reward = {
   prizeType?: string;
   sponsor?: string;
   voucherCode?: string | null;
+  revealedAt?: string;
 };
 
 export function RewardReveal() {
@@ -20,16 +22,34 @@ export function RewardReveal() {
   const lastPoint = useRef<{ x: number; y: number } | null>(null);
   const scratching = useRef(false);
   const strokes = useRef(0);
-  const [reward, setReward] = useState<Reward | null>(null);
+  const [reward, setReward] = useState<RewardCardDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [revealing, setRevealing] = useState(false);
   const [error, setError] = useState("");
+  const [shareStatus, setShareStatus] = useState("");
+  const [celebration, setCelebration] = useState(false);
+
+  const saveRewardPdf = useCallback((details: RewardCardDetails) => {
+    const pdf = createRewardCardPdf(details);
+    const safeTitle = (details.title ?? "reward").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
+    pdf.save(`3d-print-co-reward-${safeTitle || "card"}.pdf`);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await apiGet<Reward>(`/api/rewards/reveal?token=${encodeURIComponent(token)}`);
-      if (result.revealed) setReward(result);
+      const result = await apiGet<RewardResponse>(`/api/rewards/reveal?token=${encodeURIComponent(token)}`);
+      if (result.revealed && typeof result.title === "string") {
+        setReward({
+          title: result.title,
+          description: result.description,
+          worth: result.worth,
+          prizeType: result.prizeType,
+          sponsor: result.sponsor,
+          voucherCode: result.voucherCode,
+          revealedAt: result.revealedAt,
+        });
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "This reward link is not valid.");
     } finally {
@@ -64,15 +84,44 @@ export function RewardReveal() {
     setRevealing(true);
     setError("");
     try {
-      const result = await apiPost<Reward>("/api/rewards/reveal", { token });
-      if (!result.revealed) throw new Error("The reward could not be revealed. Please try again.");
-      setReward(result);
+      const result = await apiPost<RewardResponse>("/api/rewards/reveal", { token });
+      if (!result.revealed || !result.title) throw new Error("The reward could not be revealed. Please try again.");
+      const details: RewardCardDetails = {
+        title: result.title,
+        description: result.description,
+        worth: result.worth,
+        prizeType: result.prizeType,
+        sponsor: result.sponsor,
+        voucherCode: result.voucherCode,
+        revealedAt: result.revealedAt,
+      };
+      setReward(details);
+      setCelebration(true);
+      saveRewardPdf(details);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The reward could not be revealed.");
     } finally {
       setRevealing(false);
     }
-  }, [revealing, reward, token]);
+  }, [revealing, reward, saveRewardPdf, token]);
+
+  const shareReward = useCallback(async () => {
+    if (!reward) return;
+    setShareStatus("");
+    const pdf = createRewardCardPdf(reward);
+    const file = new File([pdf.output("blob")], "3d-print-co-reward.pdf", { type: "application/pdf" });
+    try {
+      if (!navigator.share || !navigator.canShare?.({ files: [file] })) {
+        saveRewardPdf(reward);
+        setShareStatus("This browser cannot share PDF files directly. The reward PDF has been downloaded.");
+        return;
+      }
+      await navigator.share({ title: "My 3D Print Co. reward", text: "Here is my revealed reward card.", files: [file] });
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      setError(caught instanceof Error ? caught.message : "The reward card could not be shared.");
+    }
+  }, [reward, saveRewardPdf]);
 
   const scratch = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const element = canvas.current;
@@ -106,8 +155,9 @@ export function RewardReveal() {
         samples += 1;
         if (pixels[index] < 30) clear += 1;
       }
-      if (clear / samples >= 0.4) {
+      if (clear / samples >= 0.9) {
         scratching.current = false;
+        context.clearRect(0, 0, element.width, element.height);
         void reveal();
       }
     }
@@ -124,17 +174,36 @@ export function RewardReveal() {
         {loading ? (
           <p className="mt-4 text-sm text-white/45"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Checking reward link…</p>
         ) : reward ? (
-          <div className="mt-6 rounded-2xl border border-violet-300/20 bg-violet-300/[0.06] p-5 text-left">
-            <p className="text-xl font-semibold text-white">{reward.title}</p>
-            {reward.description && <p className="mt-2 text-sm leading-relaxed text-white/65">{reward.description}</p>}
-            {typeof reward.worth === "number" && <p className="mt-3 text-sm text-mint">Prize value: {inr(reward.worth)}</p>}
-            {reward.sponsor && <p className="mt-1 text-xs text-white/45">Sponsored by {reward.sponsor}</p>}
-            {reward.voucherCode && (
-              <div className="mt-5 rounded-xl border border-dashed border-white/20 bg-black/20 p-4">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-white/40">Voucher code</p>
-                <p className="mt-1 font-mono text-lg font-bold tracking-wider text-white">{reward.voucherCode}</p>
-              </div>
-            )}
+          <div className="relative mt-6 overflow-hidden rounded-[1.75rem] border border-violet-200/30 bg-gradient-to-br from-violet-500/25 via-[#171127] to-emerald-500/15 p-6 text-left shadow-[0_0_55px_rgba(167,139,250,0.2)] sm:p-8">
+            <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+              {celebration && Array.from({ length: 22 }, (_, index) => (
+                <span key={index} className={`absolute top-0 h-2 w-1.5 animate-bounce rounded-sm ${index % 3 === 0 ? "bg-mint" : index % 3 === 1 ? "bg-sun" : "bg-violet-200"}`}
+                  style={{ left: `${(index * 47 + 9) % 100}%`, animationDelay: `${(index % 7) * 0.12}s`, transform: `rotate(${index * 31}deg)` }} />
+              ))}
+            </div>
+            <div className="relative">
+              <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-violet-200/70">{reward.sponsor || "3D Print Co."} reward</p>
+              <p className="mt-3 text-2xl font-bold text-white">{reward.title}</p>
+              {reward.description && <p className="mt-3 text-sm leading-relaxed text-white/70">{reward.description}</p>}
+              {typeof reward.worth === "number" && reward.worth > 0 && <p className="mt-4 text-sm font-semibold text-mint">Reward value: {inr(reward.worth)}</p>}
+              {reward.sponsor && <p className="mt-2 text-xs text-white/50">Provided by {reward.sponsor}</p>}
+              {reward.voucherCode && (
+                <div className="mt-5 rounded-xl border border-dashed border-violet-200/35 bg-black/25 p-4">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/45">Voucher code</p>
+                  <p className="mt-1 break-all font-mono text-lg font-bold tracking-wider text-white">{reward.voucherCode}</p>
+                </div>
+              )}
+              <p className="mt-5 border-t border-white/10 pt-3 text-[10px] text-white/45">Revealed once · saved as a reward card</p>
+            </div>
+            <div className="relative mt-5 flex flex-wrap gap-2">
+              <button type="button" className="btn-primary !py-2.5 !text-[11px]" onClick={() => saveRewardPdf(reward)}>
+                <Download className="h-4 w-4" /> Download card PDF
+              </button>
+              <button type="button" className="btn-glass !py-2.5 !text-[11px]" onClick={() => void shareReward()}>
+                <Share2 className="h-4 w-4" /> Share reward card
+              </button>
+            </div>
+            {shareStatus && <p className="relative mt-3 text-[10px] text-white/45">{shareStatus}</p>}
           </div>
         ) : (
           <>
@@ -158,10 +227,7 @@ export function RewardReveal() {
                 aria-label="Scratch card to reveal your prize"
               />
             </div>
-            <button type="button" onClick={() => void reveal()} disabled={revealing} className="btn-primary mx-auto mt-5">
-              {revealing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {revealing ? "Revealing…" : "Tap to reveal"}
-            </button>
+            {revealing && <p className="mt-4 text-[11px] text-violet-200"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Revealing your reward…</p>}
           </>
         )}
         {error && <p className="mt-4 rounded-xl border border-coral/25 bg-coral/[0.08] px-3 py-2 text-xs text-coral">{error}</p>}

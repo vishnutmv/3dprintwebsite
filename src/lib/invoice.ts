@@ -95,6 +95,73 @@ export function createInvoicePdf(order: Order): jsPDF {
   return pdf;
 }
 
+export type RewardCardDetails = {
+  title: string;
+  description?: string;
+  worth?: number;
+  sponsor?: string;
+  voucherCode?: string | null;
+  prizeType?: string;
+  revealedAt?: string;
+};
+
+export function createRewardCardPdf(reward: RewardCardDetails): jsPDF {
+  const pdf = new jsPDF({ unit: "pt", format: [360, 520] });
+  pdf.setFillColor(14, 12, 27);
+  pdf.rect(0, 0, 360, 520, "F");
+  pdf.setDrawColor(157, 125, 255);
+  pdf.setLineWidth(2);
+  pdf.roundedRect(20, 20, 320, 480, 22, 22, "S");
+  pdf.setTextColor(184, 164, 255);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10);
+  pdf.text("3D PRINT CO.  |  REWARD CARD", 180, 62, { align: "center" });
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(20);
+  const titleLines = pdf.splitTextToSize(reward.title, 270).slice(0, 3);
+  pdf.text(titleLines, 180, 140, { align: "center" });
+  let y = 155 + titleLines.length * 22;
+  if (typeof reward.worth === "number" && reward.worth > 0) {
+    pdf.setTextColor(103, 232, 190);
+    pdf.setFontSize(14);
+    pdf.text(`Reward value: INR ${(reward.worth / 100).toFixed(2)}`, 180, y, { align: "center" });
+    y += 26;
+  }
+  pdf.setTextColor(220, 216, 233);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(12);
+  if (reward.description) {
+    const lines = pdf.splitTextToSize(reward.description.slice(0, 420), 255).slice(0, 6);
+    pdf.setFontSize(10);
+    pdf.text(lines, 180, y, { align: "center" });
+    y += lines.length * 14 + 14;
+  }
+  if (reward.sponsor) {
+    pdf.setTextColor(180, 172, 201);
+    pdf.setFontSize(10);
+    pdf.text(`Provided by ${reward.sponsor}`, 180, y, { align: "center" });
+    y += 22;
+  }
+  if (reward.voucherCode) {
+    if (y + 60 > 438) y = 374;
+    pdf.setDrawColor(120, 104, 160);
+    pdf.roundedRect(48, y, 264, 54, 8, 8, "S");
+    pdf.setTextColor(174, 160, 214);
+    pdf.setFontSize(8);
+    pdf.text("VOUCHER CODE", 180, y + 18, { align: "center" });
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(13);
+    pdf.text(reward.voucherCode, 180, y + 39, { align: "center" });
+  }
+  pdf.setTextColor(150, 143, 169);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.text("Thank you for being part of our community.", 180, 470, { align: "center" });
+  if (reward.revealedAt) pdf.text(`Revealed ${new Date(reward.revealedAt).toLocaleDateString("en-IN")}`, 180, 488, { align: "center" });
+  return pdf;
+}
+
 export function invoicePdfBase64(pdf: jsPDF): string {
   const data = pdf.output("datauristring");
   const separator = data.indexOf(",");

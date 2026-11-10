@@ -138,8 +138,9 @@ function prize_out(array $row, bool $public = false): array
         'id' => $row['id'], 'title' => $row['title'], 'description' => $row['description'],
         'prizeType' => $row['prize_type'], 'worth' => (int)$row['worth'],
         'sponsor' => $row['sponsor'], 'cycle' => $row['cycle'], 'status' => $row['status'],
-        'mediaUrls' => $media,
+        'mediaUrls' => $media, 'quantity' => (int)($row['quantity'] ?? 1),
     ];
+    if (isset($row['available_quantity'])) $result['availableQuantity'] = max(0, (int)$row['available_quantity']);
     if (!$public) {
         $result['tier'] = $row['prize_type'];
         $voucherCode = $row['voucher_code'] ?? null;

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Boxes,
   BarChart3,
+  Handshake,
   Gauge,
   Gift,
   Loader2,
@@ -33,6 +34,7 @@ const nav = [
   { to: "/admin/campaigns", label: "Campaigns", icon: Send },
   { to: "/admin/insights", label: "Insights", icon: BarChart3 },
   { to: "/admin/prizes", label: "Prizes", icon: Gift },
+  { to: "/admin/collaborators", label: "Collaborators", icon: Handshake },
   { to: "/admin/settings", label: "Settings", icon: Settings2 },
 ];
 
@@ -138,21 +140,35 @@ export function AdminLayout() {
   useEffect(() => {
     if (!authenticated) return;
     let active = true;
+    let previousCount: number | null = null;
     const refreshCount = async () => {
       try {
         const count = await getNewLeadCount();
-        if (active) setNewLeadCount(count);
+        if (active) {
+          setNewLeadCount(count);
+          if (previousCount !== null && count > previousCount) {
+            toast(`${count - previousCount} new WhatsApp ${count - previousCount === 1 ? "enquiry" : "enquiries"} need attention.`, "warn");
+          }
+          previousCount = count;
+        }
       } catch (caught) {
         if (active) console.error("Could not refresh WhatsApp enquiry count:", caught);
       }
     };
     void refreshCount();
-    const interval = window.setInterval(() => void refreshCount(), 60_000);
+    const interval = window.setInterval(() => void refreshCount(), 15_000);
     return () => {
       active = false;
       window.clearInterval(interval);
     };
-  }, [authenticated, location.pathname]);
+  }, [authenticated, location.pathname, toast]);
+
+  useEffect(() => {
+    const originalTitle = document.title;
+    if (newLeadCount > 0) document.title = `(${newLeadCount}) New WhatsApp enquiry · 3D Print Co.`;
+    else document.title = originalTitle;
+    return () => { document.title = originalTitle; };
+  }, [newLeadCount]);
 
   const handleSignOut = async () => {
     try {
@@ -188,7 +204,9 @@ export function AdminLayout() {
               className={({ isActive }) =>
                 cn(
                   "flex items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13px] font-medium transition",
-                  isActive
+                  item.to === "/admin/leads" && newLeadCount > 0
+                    ? "animate-pulse border border-sun/20 bg-sun/[0.08] text-sun"
+                    : isActive
                     ? "bg-violet-500/20 text-white shadow-[inset_0_1px_0_rgba(255,255,255,.12)]"
                     : "text-white/50 hover:bg-white/[0.05] hover:text-white",
                 )
@@ -197,7 +215,7 @@ export function AdminLayout() {
               <item.icon className="h-4 w-4" />
               <span>{item.label}</span>
               {item.to === "/admin/leads" && newLeadCount > 0 && (
-                <span className="ml-auto min-w-5 rounded-full bg-sun px-1.5 py-0.5 text-center text-[9px] font-bold text-ink-950">
+                <span className="ml-auto min-w-5 animate-pulse rounded-full bg-sun px-1.5 py-0.5 text-center text-[9px] font-bold text-ink-950">
                   {newLeadCount > 99 ? "99+" : newLeadCount}
                 </span>
               )}
@@ -245,14 +263,16 @@ export function AdminLayout() {
               className={({ isActive }) =>
                 cn(
                   "flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-medium",
-                  isActive ? "bg-violet-500/25 text-white" : "text-white/50",
+                  item.to === "/admin/leads" && newLeadCount > 0
+                    ? "animate-pulse bg-sun/[0.08] text-sun"
+                    : isActive ? "bg-violet-500/25 text-white" : "text-white/50",
                 )
               }
             >
               <item.icon className="h-3.5 w-3.5" />
               <span>{item.label}</span>
               {item.to === "/admin/leads" && newLeadCount > 0 && (
-                <span className="rounded-full bg-sun px-1.5 py-0.5 text-[9px] font-bold text-ink-950">
+                <span className="animate-pulse rounded-full bg-sun px-1.5 py-0.5 text-[9px] font-bold text-ink-950">
                   {newLeadCount > 99 ? "99+" : newLeadCount}
                 </span>
               )}

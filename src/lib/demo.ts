@@ -5,7 +5,7 @@ const DEMO_SESSION_KEY = "3dp-client-demo-session";
 
 type DemoProduct = Product & { active: boolean; createdAt: string };
 type DemoOrder = Order & { marketingOptIn?: boolean };
-type DemoPrize = Prize & { active: boolean; createdAt: string; awardedToName?: string };
+type DemoPrize = Prize & { active: boolean; createdAt: string; awardedToName?: string; quantity: number; availableQuantity?: number };
 type DemoCustomer = {
   id: string;
   customerCode: string;
@@ -48,6 +48,28 @@ type DemoCampaign = {
   recipientCodes: string[];
 };
 type DemoRewardToken = { token: string; prizeId: string; revealed: boolean };
+type DemoCollaboratorOffer = {
+  id: string;
+  collaboratorId: string;
+  prizeId: string;
+  rewardName: string;
+  rewardType: "cashback" | "percentage_discount" | "fixed_discount" | "product" | "other";
+  rewardValue: number;
+  quantity: number;
+  terms: string;
+  createdAt: string;
+};
+type DemoCollaborator = {
+  id: string;
+  name: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  notes: string;
+  active: boolean;
+  createdAt: string;
+  offers: DemoCollaboratorOffer[];
+};
 type DemoLead = {
   id: string;
   chatId: string;
@@ -61,6 +83,9 @@ type DemoLead = {
   chatUrl: string;
   customer: null;
   isBusinessEnquiry?: boolean;
+  isExistingCustomer?: boolean;
+  enquiryInterest?: string;
+  detailsRequestedAt?: string | null;
 };
 type DemoWhatsAppMessage = {
   id: string;
@@ -79,6 +104,7 @@ type DemoDb = {
   whatsappMessages: DemoWhatsAppMessage[];
   campaigns: DemoCampaign[];
   rewardTokens: DemoRewardToken[];
+  collaborators: DemoCollaborator[];
   settings: StoreSettings;
 };
 
@@ -156,12 +182,12 @@ function seedDemoDb(): DemoDb {
   ];
 
   const prizes: DemoPrize[] = [
-    { id: "demo-r-01", title: "₹500 Studio Voucher", description: "A sample partner voucher for a future campaign. Final terms are subject to approval.", prizeType: "voucher", tier: "regular", voucherCode: "DEMO-500", worth: 50000, sponsor: "3D Print Co.", cycle: "Sample campaign", status: "open", active: true, createdAt: daysAgo(15) },
-    { id: "demo-r-02", title: "Custom Print Credit", description: "Credit toward a custom 3D-printing project.", prizeType: "credit", tier: "special", worth: 100000, sponsor: "Studio reward", cycle: "Sample campaign", status: "open", active: true, createdAt: daysAgo(12) },
-    { id: "demo-r-03", title: "Filament Starter Pack", description: "A sample reward bundle for an upcoming partner campaign.", prizeType: "product", tier: "regular", worth: 79900, sponsor: "Partner preview", cycle: "Sample campaign", status: "open", active: true, createdAt: daysAgo(9) },
+    { id: "demo-r-01", title: "₹500 Studio Voucher", description: "A sample partner voucher for a future campaign. Final terms are subject to approval.", prizeType: "voucher", tier: "regular", voucherCode: "DEMO-500", worth: 50000, sponsor: "3D Print Co.", cycle: "Sample campaign", status: "open", active: true, quantity: 1, createdAt: daysAgo(15) },
+    { id: "demo-r-02", title: "Custom Print Credit", description: "Credit toward a custom 3D-printing project.", prizeType: "credit", tier: "special", worth: 100000, sponsor: "Studio reward", cycle: "Sample campaign", status: "open", active: true, quantity: 1, createdAt: daysAgo(12) },
+    { id: "demo-r-03", title: "Filament Starter Pack", description: "A sample reward bundle for an upcoming partner campaign.", prizeType: "product", tier: "regular", worth: 79900, sponsor: "Partner preview", cycle: "Sample campaign", status: "open", active: true, quantity: 1, createdAt: daysAgo(9) },
   ];
 
-  return { products, orders: sampleOrders, prizes, assignments: [], leads: [], whatsappMessages: [], campaigns: [], rewardTokens: [], settings: { ...demoSettings } };
+  return { products, orders: sampleOrders, prizes, assignments: [], leads: [], whatsappMessages: [], campaigns: [], rewardTokens: [], collaborators: [], settings: { ...demoSettings } };
 }
 
 function readDb(): DemoDb {
@@ -177,10 +203,14 @@ function readDb(): DemoDb {
   }
   return {
     ...(parsed as DemoDb),
+    prizes: Array.isArray((parsed as Partial<DemoDb>).prizes)
+      ? (parsed as DemoDb).prizes.map((prize) => ({ ...prize, quantity: Math.max(1, Number(prize.quantity) || 1) }))
+      : [],
     leads: Array.isArray((parsed as Partial<DemoDb>).leads) ? (parsed as DemoDb).leads : [],
     whatsappMessages: Array.isArray((parsed as Partial<DemoDb>).whatsappMessages) ? (parsed as DemoDb).whatsappMessages : [],
     campaigns: Array.isArray((parsed as Partial<DemoDb>).campaigns) ? (parsed as DemoDb).campaigns : [],
     rewardTokens: Array.isArray((parsed as Partial<DemoDb>).rewardTokens) ? (parsed as DemoDb).rewardTokens : [],
+    collaborators: Array.isArray((parsed as Partial<DemoDb>).collaborators) ? (parsed as DemoDb).collaborators : [],
   };
 }
 
@@ -358,7 +388,10 @@ export async function demoApiRequest<T>(
     return jsonResponse({ settings: db.settings }) as T;
   }
   if (route === "/api/prizes" && method === "GET") {
-    return jsonResponse({ prizes: db.prizes.filter((prize) => prize.active && prize.status === "open") }) as T;
+    return jsonResponse({
+      prizes: db.prizes.filter((prize) => prize.active && prize.status === "open"
+        && !db.collaborators.flatMap((item) => item.offers).some((offer) => offer.prizeId === prize.id)),
+    }) as T;
   }
 
   if (route === "/api/orders" && method === "POST") {
@@ -470,7 +503,7 @@ export async function demoApiRequest<T>(
 
   if (route === "/api/admin/insights" && method === "GET") {
     const paidOrders = db.orders.filter((order) => order.paymentStatus === "paid");
-    const enquiries = db.leads.filter((lead) => lead.isBusinessEnquiry);
+    const enquiries = db.leads.filter((lead) => lead.isBusinessEnquiry && !lead.isExistingCustomer);
     const conversions = enquiries.filter((lead) => lead.customer);
     const byDay = new Map<string, number>();
     for (const order of paidOrders) {
@@ -646,7 +679,13 @@ export async function demoApiRequest<T>(
   }
 
   if (route === "/api/admin/prizes" && method === "GET") {
-    return jsonResponse({ prizes: db.prizes, assignments: db.assignments }) as T;
+    return jsonResponse({
+      prizes: db.prizes.map((prize) => ({
+        ...prize,
+        availableQuantity: Math.max(0, prize.quantity - db.assignments.filter((item) => item.prizeId === prize.id && !item.releasedAt).length),
+      })),
+      assignments: db.assignments,
+    }) as T;
   }
   if (route === "/api/admin/prizes" && method === "POST") {
     const prize: DemoPrize = {
@@ -657,6 +696,7 @@ export async function demoApiRequest<T>(
       tier: String(payload.prizeType ?? "regular"),
       voucherCode: String(payload.voucherCode ?? "") || undefined,
       worth: Number(payload.worth ?? 0),
+      quantity: Math.max(1, Number(payload.quantity ?? 1)),
       sponsor: String(payload.sponsor ?? ""),
       cycle: String(payload.cycle ?? ""),
       status: "open",
@@ -671,7 +711,10 @@ export async function demoApiRequest<T>(
     const prize = db.prizes.find((item) => item.id === payload.prizeId && item.active && item.status === "open");
     const customer = customersFrom(db.orders).find((item) => item.customerCode === payload.customerId && item.paidOrders > 0);
     if (!prize || !customer) badRequest("Choose an open prize and a customer with a paid sample order.");
-    prize.status = "awarded";
+    const activeAssignments = db.assignments.filter((item) => item.prizeId === prize.id && !item.releasedAt);
+    if (activeAssignments.length >= prize.quantity) badRequest("No units of this reward remain.", 409);
+    if (activeAssignments.some((item) => item.customerId === customer.customerCode)) badRequest("This customer already has this active reward.", 409);
+    if (activeAssignments.length + 1 >= prize.quantity) prize.status = "awarded";
     prize.awardedTo = customer.customerCode;
     prize.awardedToName = customer.name;
     prize.awardedAt = new Date().toISOString();
@@ -697,6 +740,87 @@ export async function demoApiRequest<T>(
     db.assignments.unshift(assignment);
     writeDb(db);
     return jsonResponse({ assignment }) as T;
+  }
+  if (route === "/api/admin/collaborators" && method === "GET") {
+    return jsonResponse({ collaborators: db.collaborators }) as T;
+  }
+  if (route === "/api/admin/collaborators" && method === "POST") {
+    const collaborator: DemoCollaborator = {
+      id: `demo-partner-${crypto.randomUUID()}`,
+      name: String(payload.name ?? ""),
+      contactName: String(payload.contactName ?? ""),
+      email: String(payload.email ?? ""),
+      phone: String(payload.phone ?? ""),
+      notes: String(payload.notes ?? ""),
+      active: true,
+      createdAt: new Date().toISOString(),
+      offers: [],
+    };
+    if (collaborator.name.trim().length < 2) badRequest("Collaborator name must contain at least 2 characters.");
+    db.collaborators.unshift(collaborator);
+    writeDb(db);
+    return jsonResponse({ collaborator }) as T;
+  }
+  const demoCollaboratorOfferMatch = route.match(/^\/api\/admin\/collaborators\/([^/]+)\/offers$/);
+  if (demoCollaboratorOfferMatch && method === "POST") {
+    const collaborator = db.collaborators.find((item) => item.id === decodeURIComponent(demoCollaboratorOfferMatch[1]));
+    if (!collaborator || !collaborator.active) badRequest("Choose an active collaborator.", 404);
+    const quantity = Number(payload.quantity ?? 1);
+    const rewardValue = Number(payload.rewardValue ?? 0);
+    if (!Number.isInteger(quantity) || quantity < 1 || !Number.isFinite(rewardValue) || rewardValue < 0) badRequest("Enter a valid reward value and quantity.");
+    const prizeId = `demo-r-${crypto.randomUUID()}`;
+    const offer: DemoCollaboratorOffer = {
+      id: `demo-offer-${crypto.randomUUID()}`,
+      collaboratorId: collaborator.id,
+      prizeId,
+      rewardName: String(payload.rewardName ?? ""),
+      rewardType: String(payload.rewardType ?? "other") as DemoCollaboratorOffer["rewardType"],
+      rewardValue,
+      quantity,
+      terms: String(payload.terms ?? ""),
+      createdAt: new Date().toISOString(),
+    };
+    const prize: DemoPrize = {
+      id: prizeId,
+      title: offer.rewardName,
+      description: offer.terms,
+      prizeType: offer.rewardType === "product" || offer.rewardType === "other" ? "regular" : "voucher",
+      tier: offer.rewardType,
+      worth: offer.rewardType === "cashback" || offer.rewardType === "fixed_discount" ? Math.round(rewardValue * 100) : 0,
+      sponsor: collaborator.name,
+      cycle: "Collaborator offer",
+      status: "open",
+      active: true,
+      quantity,
+      createdAt: new Date().toISOString(),
+    };
+    db.prizes.unshift(prize);
+    collaborator.offers.unshift(offer);
+    writeDb(db);
+    return jsonResponse({ offer }) as T;
+  }
+  const demoCollaboratorMatch = route.match(/^\/api\/admin\/collaborators\/([^/]+)$/);
+  if (demoCollaboratorMatch && method === "PATCH") {
+    const collaborator = db.collaborators.find((item) => item.id === decodeURIComponent(demoCollaboratorMatch[1]));
+    if (!collaborator) badRequest("Collaborator not found.", 404);
+    Object.assign(collaborator, payload);
+    writeDb(db);
+    return jsonResponse({ collaborator }) as T;
+  }
+  const demoOfferMatch = route.match(/^\/api\/admin\/collaborator-offers\/([^/]+)$/);
+  if (demoOfferMatch && method === "PATCH") {
+    const offer = db.collaborators.flatMap((item) => item.offers).find((item) => item.id === decodeURIComponent(demoOfferMatch[1]));
+    if (!offer) badRequest("Collaborator offer not found.", 404);
+    Object.assign(offer, payload);
+    const prize = db.prizes.find((item) => item.id === offer.prizeId);
+    if (prize) {
+      prize.title = offer.rewardName;
+      prize.description = offer.terms;
+      prize.quantity = offer.quantity;
+      prize.worth = offer.rewardType === "cashback" || offer.rewardType === "fixed_discount" ? Math.round(offer.rewardValue * 100) : 0;
+    }
+    writeDb(db);
+    return jsonResponse({ offer }) as T;
   }
   const prizeMatch = route.match(/^\/api\/admin\/prizes\/([^/]+)$/);
   if (prizeMatch) {

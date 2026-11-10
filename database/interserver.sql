@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS prizes (
   sponsor VARCHAR(160) NOT NULL DEFAULT '',
   cycle VARCHAR(60) NOT NULL DEFAULT '',
   status ENUM('open','awarded','claimed') NOT NULL DEFAULT 'open',
+  quantity INT UNSIGNED NOT NULL DEFAULT 1,
   media_urls JSON NOT NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -128,11 +129,39 @@ CREATE TABLE IF NOT EXISTS customer_prizes (
   notes VARCHAR(500) NULL,
   reveal_token CHAR(64) NOT NULL UNIQUE,
   revealed_at DATETIME NULL,
-  UNIQUE KEY uq_customer_prizes_active_prize (active_prize_id),
+  INDEX idx_customer_prizes_active_prize (active_prize_id),
   INDEX idx_customer_prizes_customer (customer_id, assigned_at),
   INDEX idx_customer_prize_history (prize_id, assigned_at),
   CONSTRAINT fk_customer_prizes_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
   CONSTRAINT fk_customer_prizes_prize FOREIGN KEY (prize_id) REFERENCES prizes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS collaborators (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  name VARCHAR(160) NOT NULL,
+  contact_name VARCHAR(120) NOT NULL DEFAULT '',
+  email VARCHAR(254) NULL,
+  phone VARCHAR(24) NOT NULL DEFAULT '',
+  notes VARCHAR(1000) NOT NULL DEFAULT '',
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_collaborators_active_name (is_active,name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS collaborator_offers (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  collaborator_id CHAR(36) NOT NULL,
+  prize_id CHAR(36) NOT NULL UNIQUE,
+  reward_name VARCHAR(160) NOT NULL,
+  reward_type ENUM('cashback','percentage_discount','fixed_discount','product','other') NOT NULL,
+  reward_value DECIMAL(10,2) NOT NULL DEFAULT 0,
+  quantity INT UNSIGNED NOT NULL DEFAULT 1,
+  terms VARCHAR(1000) NOT NULL DEFAULT '',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_collaborator_offers_collaborator (collaborator_id,created_at),
+  CONSTRAINT fk_collaborator_offers_collaborator FOREIGN KEY (collaborator_id) REFERENCES collaborators(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_collaborator_offers_prize FOREIGN KEY (prize_id) REFERENCES prizes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -155,14 +184,17 @@ INSERT IGNORE INTO settings (id, setting_key, setting_value) VALUES
 CREATE TABLE IF NOT EXISTS whatsapp_leads (
   id CHAR(36) NOT NULL PRIMARY KEY,
   chat_id VARCHAR(120) NOT NULL UNIQUE,
-  phone_e164 VARCHAR(24) NULL UNIQUE,
+  phone_e164 VARCHAR(24) NULL,
   customer_id CHAR(36) NULL,
   contact_name VARCHAR(120) NOT NULL DEFAULT '',
   last_message TEXT NOT NULL,
   last_message_at DATETIME NOT NULL,
   status ENUM('new','active','closed') NOT NULL DEFAULT 'new',
   is_business_enquiry TINYINT(1) NOT NULL DEFAULT 0,
+  is_existing_customer TINYINT(1) NOT NULL DEFAULT 0,
   business_enquiry_at DATETIME NULL,
+  enquiry_interest TEXT NULL,
+  details_requested_at DATETIME NULL,
   last_auto_reply_at DATETIME NULL,
   auto_reply_attempted_at DATETIME NULL,
   last_admin_reply_at DATETIME NULL,
@@ -173,6 +205,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_leads (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_whatsapp_leads_status_updated (status, updated_at),
+  INDEX idx_whatsapp_leads_phone (phone_e164),
   INDEX idx_whatsapp_leads_customer (customer_id),
   INDEX idx_whatsapp_leads_followup (auto_followup_due_at, auto_followup_sent_at),
   CONSTRAINT fk_whatsapp_leads_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
