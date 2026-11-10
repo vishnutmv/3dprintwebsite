@@ -3,6 +3,7 @@ import { ExternalLink, Loader2, MessageCircle, RefreshCw } from "lucide-react";
 import { dateTime } from "@/lib/format";
 import { getLeads, updateLeadStatus, type AdminLead } from "@/lib/admin";
 import { useToast } from "@/lib/toast";
+import { WhatsAppChat } from "./WhatsAppChat";
 
 type LeadFilter = "all" | AdminLead["status"];
 
@@ -117,6 +118,13 @@ export function AdminLeads() {
                     </span>
                   </div>
                   <p className="mt-1 font-mono text-[11px] text-white/45">{lead.phone.startsWith("+") || lead.phone.endsWith("@lid") ? lead.phone : `+${lead.phone}`}</p>
+                  {lead.customer && (
+                    <p className="mt-1 text-[10.5px] leading-relaxed text-white/40">
+                      Customer {lead.customer.customerCode} · {lead.customer.email || "No email"} ·{" "}
+                      {[lead.customer.address, lead.customer.city, lead.customer.state, lead.customer.postalCode].filter(Boolean).join(", ")}
+                      {lead.customer.marketingOptIn ? " · marketing consent on file" : ""}
+                    </p>
+                  )}
                 </div>
                 <p className="text-[10.5px] text-white/35">{dateTime(lead.lastMessageAt)}</p>
               </div>
@@ -124,6 +132,12 @@ export function AdminLeads() {
               <p className="mt-4 whitespace-pre-wrap break-words rounded-2xl border border-white/8 bg-black/20 p-3 text-[12px] leading-relaxed text-white/70">
                 {lead.lastMessage}
               </p>
+
+              <p className="mt-2 text-[10px] text-white/35">
+                Latest activity {dateTime(lead.lastMessageAt)}
+              </p>
+
+              <WhatsAppChat chatId={lead.chatId} phone={lead.phone} name={lead.name} />
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {lead.chatUrl ? (

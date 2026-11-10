@@ -32,6 +32,7 @@ export type AdminCustomer = {
 
 export type AdminLead = {
   id: string;
+  chatId: string;
   phone: string;
   name: string;
   lastMessage: string;
@@ -40,6 +41,25 @@ export type AdminLead = {
   createdAt: string;
   updatedAt: string;
   chatUrl: string;
+  customer: {
+    customerCode: string;
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    marketingOptIn: boolean;
+  } | null;
+};
+
+export type WhatsAppMessage = {
+  id: string;
+  direction: "inbound" | "outbound";
+  type: string;
+  body: string;
+  createdAt: string;
 };
 
 export type AdminOrder = Order;
@@ -269,6 +289,22 @@ export async function updateLeadStatus(id: string, status: AdminLead["status"]):
     { status },
   );
   return response.lead;
+}
+
+export async function getWhatsAppMessages(chatId: string): Promise<WhatsAppMessage[]> {
+  const response = await adminGet<{ messages: WhatsAppMessage[] }>(
+    `/api/admin/whatsapp/messages?chatId=${encodeURIComponent(chatId)}`,
+  );
+  return response.messages;
+}
+
+export function sendWhatsAppMessage(input: {
+  chatId?: string;
+  phone?: string;
+  name: string;
+  message: string;
+}): Promise<{ sent: boolean }> {
+  return adminPost("/api/admin/whatsapp/messages", input);
 }
 
 /* ----------------------------- Prizes ------------------------------ */

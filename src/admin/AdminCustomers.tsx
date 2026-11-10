@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import { inr, initials, shortDate } from "@/lib/format";
 import { getCustomer, getCustomers, type AdminCustomer, type AdminOrder } from "@/lib/admin";
+import { WhatsAppChat } from "./WhatsAppChat";
 
 export function AdminCustomers() {
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
@@ -136,6 +137,7 @@ export function AdminCustomers() {
             </div>
             <p className="text-[12px] text-white/55">{selected.orders} orders · {inr(selected.spend)} paid</p>
           </div>
+          <WhatsAppChat name={selected.name} phone={selected.phone} />
           <h3 className="mt-5 text-[12px] font-semibold text-white/75">Order history</h3>
           {historyLoading ? (
             <p className="mt-3 flex items-center gap-2 text-[12px] text-white/45">

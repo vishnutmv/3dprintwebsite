@@ -23,5 +23,6 @@ return [
     'waapi_instance_id' => '',
     'waapi_api_token' => '',
     'waapi_webhook_secret' => '',
+    'waapi_cron_secret' => '',
     'storefront_url' => '',
 ];

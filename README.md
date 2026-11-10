@@ -7,7 +7,7 @@ React, TypeScript and Vite storefront on Vercel, with a PHP 8.2 API, MariaDB and
 - Product catalogue, product details, cart, checkout and order confirmation.
 - Server-priced orders, customer codes, order history, Razorpay signature checks, payment webhooks, and idempotent payment status updates.
 - Admin login and protected PHP product, order, customer, prize, settings and media endpoints.
-- Manual prize assignment, configurable email/webhook notifications, and WaAPI enquiry capture with automatic product/price replies and an admin lead inbox. WhatsApp order, prize and promotional notifications are not included.
+- Manual prize assignment, configurable email/webhook notifications, and WaAPI enquiry capture with saved chat history, admin replies, product/price auto-replies and a five-minute follow-up. WhatsApp order, prize and promotional notifications are not included.
 - Optional marketing consent collected at checkout and stored on the customer record.
 - MariaDB stores business records. PHP sessions protect admin routes; media files are stored under `uploads/`.
 
@@ -110,27 +110,35 @@ Do not use live payment details for demo testing.
 
 ## WhatsApp enquiries through WaAPI
 
-The backend can receive WaAPI `message` events and send replies through the WaAPI instance API. It stores the contact's WhatsApp chat ID, optional phone number, profile name and latest message; duplicate webhook deliveries are ignored. New enquiries receive an automatic reply with up to three active, in-stock products and current prices, plus a link to the full shop. Replies are limited to once per 24 hours per lead and stop when the admin takes over. The admin can open a WhatsApp chat when a phone number is available, mark leads active/closed, and see a badge for new leads. Full message history is not stored.
+The backend can receive WaAPI `message` events and send replies through the WaAPI instance API. It stores the contact's WhatsApp chat ID, optional phone number, profile name and message history; duplicate webhook deliveries are ignored. New enquiries receive an automatic reply with up to three active, in-stock products and current prices, plus a link to the full shop; this initial product reply is limited to once per 24 hours per lead. If no admin actually replies within five minutes, one follow-up is sent; a later customer message starts a new timer. The admin can reply from the lead inbox, orders, or customer records. Messages sent from the connected WhatsApp app are also synced into the inbox when WaAPI emits their message events. Taking over suppresses the initial automatic reply, but only an actual admin message cancels the five-minute follow-up. The admin navigation shows a badge for new leads.
 
 This is the enquiry flow only; it does not send promotional broadcasts or order/prize notifications. WaAPI is a third-party WhatsApp Web-based provider, not Meta's official Cloud API. Review WaAPI's current billing, security, service terms and WhatsApp policies: using an unofficial automation provider can risk session interruption or restrictions on the WhatsApp number. Do not assume it is free.
 
 To connect the active WaAPI instance:
 
-1. Apply [`migrations/0009_whatsapp_leads.sql`](./migrations/0009_whatsapp_leads.sql), then [`migrations/0010_waapi_leads.sql`](./migrations/0010_waapi_leads.sql), to an existing MariaDB database. For a fresh import, `database/interserver.sql` already includes the current schema.
-2. Generate a long random webhook secret (at least 32 characters). On InterServer, add these values to the private `api/config.php`; keep the API token and webhook secret server-side, never in frontend code or chat:
+1. Apply [`migrations/0009_whatsapp_leads.sql`](./migrations/0009_whatsapp_leads.sql), [`migrations/0010_waapi_leads.sql`](./migrations/0010_waapi_leads.sql), then [`migrations/0011_whatsapp_conversations.sql`](./migrations/0011_whatsapp_conversations.sql), to an existing MariaDB database. For a fresh import, `database/interserver.sql` already includes the current schema.
+2. Generate long random webhook and cron secrets (each at least 32 characters). On InterServer, add these values to the private `api/config.php`; keep the API token and secrets server-side, never in frontend code or chat:
 
    ```php
    'whatsapp_business_number' => 'COUNTRYCODEANDNUMBER',
    'waapi_instance_id' => 'YOUR_INSTANCE_ID',
    'waapi_api_token' => 'YOUR_WAAPI_TOKEN',
    'waapi_webhook_secret' => 'YOUR_RANDOM_32_PLUS_CHARACTER_SECRET',
+   'waapi_cron_secret' => 'A_DIFFERENT_RANDOM_32_PLUS_CHARACTER_SECRET',
    'storefront_url' => 'https://YOUR-PUBLIC-STOREFRONT',
    ```
 
    The business number must be international digits only, without `+`. Use the actual instance ID from the WaAPI instance page. Keep the existing PHP array syntax and do not replace unrelated config values.
 3. Configure the WaAPI instance webhook URL as `https://<API-host>/api/whatsapp/waapi/<YOUR_RANDOM_SECRET>` and subscribe to **only the `message` event** initially. Do not include the secret in screenshots or share it publicly. WaAPI documents its webhook as a POST with an `event`, `instanceId`, and `data.message`; this project also checks the configured instance ID. The secret URL is necessary because WaAPI webhook requests do not include a documented signature header.
 4. Configure `resend_api_key` and `notify_from` in `api/config.php` to email the admin on a new lead. The lead still appears in the admin panel if email is unavailable; failed email alerts are logged.
-5. Deploy the changed PHP backend files and frontend. Confirm the storefront `/api/settings` response includes a non-empty `whatsappContactUrl`, then send a test enquiry from a separate WhatsApp account. Check that the product reply has current prices and that the lead appears in `/admin/leads`. Test “Take over” to disable automatic replies.
+5. In DirectAdmin, add a cron job that runs every minute with this command, replacing the secret with the value of `waapi_cron_secret`:
+
+   ```sh
+   curl -fsS -X POST 'https://<API-host>/api/whatsapp/waapi-followups/<YOUR_CRON_SECRET>' >/dev/null
+   ```
+
+   This is required for the single follow-up after five minutes. If you do not want scheduled follow-ups, do not add this cron job.
+6. Deploy the changed PHP backend files and frontend. Confirm the storefront `/api/settings` response includes a non-empty `whatsappContactUrl`, then send a test enquiry from a separate WhatsApp account. Check that the product reply has current prices and that the lead appears in `/admin/leads`. Open **Chat from admin** to view the saved conversation and reply. Test replying from the admin panel and from the connected WhatsApp phone; both should appear in the conversation.
 
 The lead inbox stores the latest message per WhatsApp chat ID, including WhatsApp privacy-preserving LIDs. Such IDs may not have a directly openable `wa.me` link; WaAPI can still reply to the incoming chat ID. A message from a person after a lead was closed reopens the lead. Apply the project's privacy/retention policy before production use.
 

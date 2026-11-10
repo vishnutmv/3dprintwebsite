@@ -36,6 +36,7 @@ type DemoAssignment = {
 };
 type DemoLead = {
   id: string;
+  chatId: string;
   phone: string;
   name: string;
   lastMessage: string;
@@ -44,6 +45,15 @@ type DemoLead = {
   createdAt: string;
   updatedAt: string;
   chatUrl: string;
+  customer: null;
+};
+type DemoWhatsAppMessage = {
+  id: string;
+  chatId: string;
+  direction: "inbound" | "outbound";
+  type: string;
+  body: string;
+  createdAt: string;
 };
 type DemoDb = {
   products: DemoProduct[];
@@ -51,6 +61,7 @@ type DemoDb = {
   prizes: DemoPrize[];
   assignments: DemoAssignment[];
   leads: DemoLead[];
+  whatsappMessages: DemoWhatsAppMessage[];
   settings: StoreSettings;
 };
 
@@ -133,7 +144,7 @@ function seedDemoDb(): DemoDb {
     { id: "demo-r-03", title: "Filament Starter Pack", description: "A sample reward bundle for an upcoming partner campaign.", prizeType: "product", tier: "regular", worth: 79900, sponsor: "Partner preview", cycle: "Sample campaign", status: "open", active: true, createdAt: daysAgo(9) },
   ];
 
-  return { products, orders: sampleOrders, prizes, assignments: [], leads: [], settings: { ...demoSettings } };
+  return { products, orders: sampleOrders, prizes, assignments: [], leads: [], whatsappMessages: [], settings: { ...demoSettings } };
 }
 
 function readDb(): DemoDb {
@@ -147,7 +158,11 @@ function readDb(): DemoDb {
   if (!parsed || typeof parsed !== "object" || !("products" in parsed) || !("orders" in parsed)) {
     throw new Error("The local demo data is invalid. Clear this site's local storage and reload.");
   }
-  return { ...(parsed as DemoDb), leads: Array.isArray((parsed as Partial<DemoDb>).leads) ? (parsed as DemoDb).leads : [] };
+  return {
+    ...(parsed as DemoDb),
+    leads: Array.isArray((parsed as Partial<DemoDb>).leads) ? (parsed as DemoDb).leads : [],
+    whatsappMessages: Array.isArray((parsed as Partial<DemoDb>).whatsappMessages) ? (parsed as DemoDb).whatsappMessages : [],
+  };
 }
 
 function writeDb(db: DemoDb): void {
@@ -471,6 +486,25 @@ export async function demoApiRequest<T>(
   }
   if (route === "/api/admin/leads/count" && method === "GET") {
     return jsonResponse({ newCount: db.leads.filter((lead) => lead.status === "new").length }) as T;
+  }
+  if (route === "/api/admin/whatsapp/messages" && method === "GET") {
+    const chatId = url.searchParams.get("chatId") ?? "";
+    return jsonResponse({ messages: db.whatsappMessages.filter((message) => message.chatId === chatId) }) as T;
+  }
+  if (route === "/api/admin/whatsapp/messages" && method === "POST") {
+    const chatId = String(payload.chatId ?? "");
+    const message = String(payload.message ?? "").trim();
+    if (!chatId || !message) badRequest("Choose a contact and enter a message.");
+    db.whatsappMessages.push({
+      id: `demo-wa-${crypto.randomUUID()}`,
+      chatId,
+      direction: "outbound",
+      type: "chat",
+      body: message,
+      createdAt: new Date().toISOString(),
+    });
+    writeDb(db);
+    return jsonResponse({ sent: true }) as T;
   }
   const demoLeadMatch = route.match(/^\/api\/admin\/leads\/([^/]+)$/);
   if (demoLeadMatch && method === "PATCH") {

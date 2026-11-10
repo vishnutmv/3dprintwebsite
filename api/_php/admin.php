@@ -250,6 +250,60 @@ function handle_admin(string $path, array $parts): bool
         }
         respond(200, ['customers' => $result]);
     }
+        if (!preg_match('/^(?:\d{6,20}@c\.us|[A-Za-z0-9_-]{1,100}@lid)$/', $chatId)) fail(400, 'A valid WhatsApp chat is required.');
+        $lead = one('SELECT id FROM whatsapp_leads WHERE chat_id=?', [$chatId]);
+        $messages = $lead
+            ? all('SELECT id, direction, message_type, body, created_at FROM whatsapp_messages WHERE lead_id=? ORDER BY created_at DESC LIMIT 200', [$lead['id']])
+            : [];
+        respond(200, ['messages' => array_reverse(array_map(static fn(array $message): array => [
+            'id' => $message['id'],
+            'direction' => $message['direction'],
+            'type' => $message['message_type'],
+            'body' => $message['body'],
+            'createdAt' => $message['created_at'],
+        ], $messages))]);
+    }
+    if ($path === 'admin/whatsapp/messages' && $method === 'POST') {
+        $input = body();
+        $phone = text_value($input['phone'] ?? '', 24);
+        $chatId = text_value($input['chatId'] ?? '', 120);
+        if ($chatId === '' && $phone !== '') $chatId = whatsapp_chat_id_from_phone($phone);
+        if (!preg_match('/^(?:\d{6,20}@c\.us|[A-Za-z0-9_-]{1,100}@lid)$/', $chatId)) fail(400, 'A valid WhatsApp chat is required.');
+        $message = text_value($input['message'] ?? '', 4000);
+        if ($message === '') fail(400, 'Enter a message to send.');
+        $name = text_value($input['name'] ?? '', 120);
+        send_whatsapp_admin_message($chatId, $name, $phone !== '' ? preg_replace('/\D/', '', $phone) : null, $message);
+        respond(201, ['sent' => true]);
+    }
+    if (preg_match('#^admin/leads/([0-9a-f-]{36})$#i', $path, $match) && $method === 'PATCH') {
+        $id = rawurldecode($match[1]);
+        if (!preg_match('/^[0-9a-f-]{36}$/i', $id)) fail(400, 'A valid lead id is required.');
+        $status = text_value(body()['status'] ?? '', 20);
+        if (!in_array($status, ['new','active','closed'], true)) fail(400, 'Unknown lead status.');
+        $result = run('UPDATE whatsapp_leads SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?', [$status, $id]);
+        if ($result->rowCount() === 0 && !one('SELECT id FROM whatsapp_leads WHERE id=?', [$id])) fail(404, 'Lead not found.');
+        $lead = one(
+            'SELECT l.id, l.chat_id, l.phone_e164, l.contact_name, l.last_message, l.last_message_at, l.status, l.created_at, l.updated_at, '
+                . 'c.customer_code AS linked_customer_code, c.full_name AS linked_customer_name, c.email AS linked_customer_email, '
+                . 'c.phone AS linked_customer_phone, c.delivery_address AS linked_customer_address, c.city AS linked_customer_city, '
+                . 'c.state AS linked_customer_state, c.postal_code AS linked_customer_postal_code, c.marketing_opt_in AS linked_marketing_opt_in '
+                . 'FROM whatsapp_leads l LEFT JOIN customers c ON c.id=l.customer_id WHERE l.id=?',
+            [$id],
+        );
+        respond(200, ['lead' => [
+            'id' => $lead['id'], 'chatId' => $lead['chat_id'], 'phone' => $lead['phone_e164'] ? '+' . $lead['phone_e164'] : $lead['chat_id'], 'name' => $lead['contact_name'],
+            'lastMessage' => $lead['last_message'], 'lastMessageAt' => $lead['last_message_at'],
+            'status' => $lead['status'], 'createdAt' => $lead['created_at'],
+            'updatedAt' => $lead['updated_at'], 'chatUrl' => $lead['phone_e164'] ? 'https://wa.me/' . $lead['phone_e164'] : '',
+            'customer' => $lead['linked_customer_code'] ? [
+                'customerCode' => $lead['linked_customer_code'], 'name' => $lead['linked_customer_name'],
+                'email' => $lead['linked_customer_email'] ?? '', 'phone' => $lead['linked_customer_phone'],
+                'address' => $lead['linked_customer_address'] ?? '', 'city' => $lead['linked_customer_city'] ?? '',
+                'state' => $lead['linked_customer_state'] ?? '', 'postalCode' => $lead['linked_customer_postal_code'] ?? '',
+                'marketingOptIn' => (bool)$lead['linked_marketing_opt_in'],
+            ] : null,
+        ]]);
+    }
     if (preg_match('#^admin/customers/([^/]+)$#', $path, $match) && $method === 'GET') {
         $ref = rawurldecode($match[1]);
         $column = preg_match('/^[0-9a-f-]{36}$/i', $ref) ? 'id' : 'customer_code';

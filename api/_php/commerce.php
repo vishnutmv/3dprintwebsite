@@ -96,6 +96,13 @@ function mark_paid(string $razorOrderId, string $paymentId): ?array
                 'UPDATE orders SET payment_status="paid",razorpay_payment_id=?,order_status=IF(order_status="pending","confirmed",order_status) WHERE id=?',
                 [$paymentId, $order['id']]
             );
+            $customer = one('SELECT id, phone, full_name FROM customers WHERE id=?', [$order['customer_id']]);
+            if ($customer) link_whatsapp_leads_to_customer(
+                (string)$customer['id'],
+                (string)$customer['phone'],
+                (string)$customer['full_name'],
+                (string)$order['id'],
+            );
         }
         $pdo->commit();
         return one('SELECT * FROM orders WHERE id=?', [$order['id']]);
@@ -221,6 +228,11 @@ function handle_commerce(string $path, array $parts): bool
             ]);
         }
         $customer = one('SELECT * FROM customers WHERE id=?', [$customerId]);
+        if ($customer) link_whatsapp_leads_to_customer(
+            (string)$customer['id'],
+            (string)$customer['phone'],
+            (string)$customer['full_name'],
+        );
         $orderId = new_id();
         do {
             $orderNumber = 'ORD-' . strtoupper(bin2hex(random_bytes(4)));

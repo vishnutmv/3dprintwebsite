@@ -9,6 +9,7 @@ import {
   updateOrderStatus,
   type AdminOrder,
 } from "@/lib/admin";
+import { WhatsAppChat } from "./WhatsAppChat";
 
 const paymentFilters = ["all", "pending", "paid", "failed", "refunded"];
 const orderFilters = [
@@ -256,6 +257,8 @@ export function AdminOrders() {
                 {selected.email ? <><br />{selected.email}</> : null}
               </p>
             </div>
+
+            <WhatsAppChat name={selected.customerName} phone={selected.phone} />
 
             <div className="mt-4">
               <p className="label">Items</p>

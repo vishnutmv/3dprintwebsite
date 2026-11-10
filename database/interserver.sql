@@ -153,15 +153,37 @@ CREATE TABLE IF NOT EXISTS whatsapp_leads (
   id CHAR(36) NOT NULL PRIMARY KEY,
   chat_id VARCHAR(120) NOT NULL UNIQUE,
   phone_e164 VARCHAR(24) NULL UNIQUE,
+  customer_id CHAR(36) NULL,
   contact_name VARCHAR(120) NOT NULL DEFAULT '',
   last_message TEXT NOT NULL,
   last_message_at DATETIME NOT NULL,
   status ENUM('new','active','closed') NOT NULL DEFAULT 'new',
   last_auto_reply_at DATETIME NULL,
   auto_reply_attempted_at DATETIME NULL,
+  last_admin_reply_at DATETIME NULL,
+  auto_followup_due_at DATETIME NULL,
+  auto_followup_sent_at DATETIME NULL,
+  converted_at DATETIME NULL,
+  conversion_order_id CHAR(36) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_whatsapp_leads_status_updated (status, updated_at)
+  INDEX idx_whatsapp_leads_status_updated (status, updated_at),
+  INDEX idx_whatsapp_leads_customer (customer_id),
+  INDEX idx_whatsapp_leads_followup (auto_followup_due_at, auto_followup_sent_at),
+  CONSTRAINT fk_whatsapp_leads_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+  CONSTRAINT fk_whatsapp_leads_conversion_order FOREIGN KEY (conversion_order_id) REFERENCES orders(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS whatsapp_messages (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  lead_id CHAR(36) NOT NULL,
+  provider_message_id VARCHAR(128) NULL UNIQUE,
+  direction ENUM('inbound','outbound') NOT NULL,
+  message_type VARCHAR(30) NOT NULL DEFAULT 'chat',
+  body TEXT NOT NULL,
+  created_at DATETIME NOT NULL,
+  INDEX idx_whatsapp_messages_lead_created (lead_id, created_at),
+  CONSTRAINT fk_whatsapp_messages_lead FOREIGN KEY (lead_id) REFERENCES whatsapp_leads(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS whatsapp_processed_messages (
