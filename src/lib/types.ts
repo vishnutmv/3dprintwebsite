@@ -29,6 +29,9 @@ export type Product = {
   accent: string;
   rating: number;
   reviews: number;
+  trendTag?: string | null;
+  soldCount?: number;
+  recentSoldCount?: number;
 };
 
 export type CartItem = { productId: string; qty: number };

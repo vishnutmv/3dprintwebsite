@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Boxes,
+  BarChart3,
   Gauge,
   Gift,
   Loader2,
@@ -9,6 +10,7 @@ import {
   MessageCircle,
   Package,
   Settings2,
+  Send,
   ShieldCheck,
   Store,
   Users,
@@ -28,6 +30,8 @@ const nav = [
   { to: "/admin/orders", label: "Orders", icon: Package },
   { to: "/admin/customers", label: "Customers", icon: Users },
   { to: "/admin/leads", label: "WhatsApp Inbox", icon: MessageCircle },
+  { to: "/admin/campaigns", label: "Campaigns", icon: Send },
+  { to: "/admin/insights", label: "Insights", icon: BarChart3 },
   { to: "/admin/prizes", label: "Prizes", icon: Gift },
   { to: "/admin/settings", label: "Settings", icon: Settings2 },
 ];

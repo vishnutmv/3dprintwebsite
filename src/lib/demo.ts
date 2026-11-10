@@ -4,6 +4,7 @@ const DEMO_DB_KEY = "3dp-client-demo-v1";
 const DEMO_SESSION_KEY = "3dp-client-demo-session";
 
 type DemoProduct = Product & { active: boolean; createdAt: string };
+type DemoOrder = Order & { marketingOptIn?: boolean };
 type DemoPrize = Prize & { active: boolean; createdAt: string; awardedToName?: string };
 type DemoCustomer = {
   id: string;
@@ -19,6 +20,7 @@ type DemoCustomer = {
   orders: number;
   paidOrders: number;
   spend: number;
+  marketingOptIn: boolean;
   joinedAt: string;
 };
 type DemoAssignment = {
@@ -32,8 +34,20 @@ type DemoAssignment = {
   notificationStatus: string;
   assignedAt: string;
   releasedAt?: string;
+  revealUrl?: string;
   notes: string;
 };
+type DemoCampaign = {
+  id: string;
+  message: string;
+  recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  skippedCount: number;
+  createdAt: string;
+  recipientCodes: string[];
+};
+type DemoRewardToken = { token: string; prizeId: string; revealed: boolean };
 type DemoLead = {
   id: string;
   chatId: string;
@@ -46,6 +60,7 @@ type DemoLead = {
   updatedAt: string;
   chatUrl: string;
   customer: null;
+  isBusinessEnquiry?: boolean;
 };
 type DemoWhatsAppMessage = {
   id: string;
@@ -57,11 +72,13 @@ type DemoWhatsAppMessage = {
 };
 type DemoDb = {
   products: DemoProduct[];
-  orders: Order[];
+  orders: DemoOrder[];
   prizes: DemoPrize[];
   assignments: DemoAssignment[];
   leads: DemoLead[];
   whatsappMessages: DemoWhatsAppMessage[];
+  campaigns: DemoCampaign[];
+  rewardTokens: DemoRewardToken[];
   settings: StoreSettings;
 };
 
@@ -130,9 +147,9 @@ function seedDemoDb(): DemoDb {
     sampleProduct("demo-p-08", "cable-dock", "Snap-fit Cable Dock", "Functional", 29900, "organiser", "#c084fc", "Everyday utility", "A tidy snap-fit cable holder for a cleaner workstation.", "PETG", 22),
   ];
 
-  const sampleOrders: Order[] = [
-    { id: "demo-o-01", orderNumber: "DPC-26041", customerId: "demo-c-01", customerCode: "3DP-K4M2-9XQP", customerName: "Aarav Menon", phone: "+91 98400 11288", email: "aarav@example.com", address: "12 Beach Road", city: "Chennai", state: "Tamil Nadu", pin: "600041", postalCode: "600041", subtotal: 129900, shipping: 0, total: 129900, status: "delivered", orderStatus: "delivered", paymentStatus: "paid", paymentId: "demo_pay_001", uid: "3DP-K4M2-9XQP", createdAt: daysAgo(2), items: [{ productId: "demo-p-01", name: "Articulated Desk Dragon", qty: 1, price: 129900, lineTotal: 129900 }] },
-    { id: "demo-o-02", orderNumber: "DPC-26040", customerId: "demo-c-02", customerCode: "3DP-P7N3-B6TA", customerName: "Diya Raman", phone: "+91 98840 22110", email: "diya@example.com", address: "4 Lake View Street", city: "Coimbatore", state: "Tamil Nadu", pin: "641001", postalCode: "641001", subtotal: 159800, shipping: 0, total: 159800, status: "shipped", orderStatus: "shipped", paymentStatus: "paid", paymentId: "demo_pay_002", uid: "3DP-P7N3-B6TA", createdAt: daysAgo(4), items: [{ productId: "demo-p-02", name: "Modular Desk Organiser", qty: 1, price: 89900, lineTotal: 89900 }, { productId: "demo-p-04", name: "Ripple Mini Planter", qty: 1, price: 69900, lineTotal: 69900 }] },
+  const sampleOrders: DemoOrder[] = [
+    { id: "demo-o-01", orderNumber: "DPC-26041", customerId: "demo-c-01", customerCode: "3DP-K4M2-9XQP", customerName: "Aarav Menon", phone: "+91 98400 11288", email: "aarav@example.com", address: "12 Beach Road", city: "Chennai", state: "Tamil Nadu", pin: "600041", postalCode: "600041", subtotal: 129900, shipping: 0, total: 129900, status: "delivered", orderStatus: "delivered", paymentStatus: "paid", paymentId: "demo_pay_001", uid: "3DP-K4M2-9XQP", createdAt: daysAgo(2), marketingOptIn: true, items: [{ productId: "demo-p-01", name: "Articulated Desk Dragon", qty: 1, price: 129900, lineTotal: 129900 }] },
+    { id: "demo-o-02", orderNumber: "DPC-26040", customerId: "demo-c-02", customerCode: "3DP-P7N3-B6TA", customerName: "Diya Raman", phone: "+91 98840 22110", email: "diya@example.com", address: "4 Lake View Street", city: "Coimbatore", state: "Tamil Nadu", pin: "641001", postalCode: "641001", subtotal: 159800, shipping: 0, total: 159800, status: "shipped", orderStatus: "shipped", paymentStatus: "paid", paymentId: "demo_pay_002", uid: "3DP-P7N3-B6TA", createdAt: daysAgo(4), marketingOptIn: true, items: [{ productId: "demo-p-02", name: "Modular Desk Organiser", qty: 1, price: 89900, lineTotal: 89900 }, { productId: "demo-p-04", name: "Ripple Mini Planter", qty: 1, price: 69900, lineTotal: 69900 }] },
     { id: "demo-o-03", orderNumber: "DPC-26039", customerId: "demo-c-03", customerCode: "3DP-H8V5-Q2LM", customerName: "Kabir Shah", phone: "+91 98765 43210", email: "kabir@example.com", address: "21 MG Road", city: "Bengaluru", state: "Karnataka", pin: "560001", postalCode: "560001", subtotal: 49900, shipping: 4900, total: 54800, status: "processing", orderStatus: "processing", paymentStatus: "paid", paymentId: "demo_pay_003", uid: "3DP-H8V5-Q2LM", createdAt: daysAgo(6), items: [{ productId: "demo-p-03", name: "Kinetic Gear Fidget", qty: 1, price: 49900, lineTotal: 49900 }] },
     { id: "demo-o-04", orderNumber: "DPC-26038", customerId: "demo-c-04", customerCode: "3DP-C5R9-W3JD", customerName: "Mira Iyer", phone: "+91 90030 44556", email: "mira@example.com", address: "8 Park Avenue", city: "Chennai", state: "Tamil Nadu", pin: "600028", postalCode: "600028", subtotal: 119900, shipping: 4900, total: 124800, status: "confirmed", orderStatus: "confirmed", paymentStatus: "paid", paymentId: "demo_pay_004", uid: "3DP-C5R9-W3JD", createdAt: daysAgo(8), items: [{ productId: "demo-p-07", name: "Lattice Table Vase", qty: 1, price: 119900, lineTotal: 119900 }] },
     { id: "demo-o-05", orderNumber: "DPC-26037", customerId: "demo-c-05", customerCode: "3DP-T1Z6-A8KU", customerName: "Neel Joshi", phone: "+91 98100 77889", email: "neel@example.com", address: "17 Station Road", city: "Hyderabad", state: "Telangana", pin: "500001", postalCode: "500001", subtotal: 159900, shipping: 0, total: 159900, status: "pending", orderStatus: "pending", paymentStatus: "pending", uid: "3DP-T1Z6-A8KU", createdAt: daysAgo(10), items: [{ productId: "demo-p-05", name: "Guardian Knight Figure", qty: 1, price: 159900, lineTotal: 159900 }] },
@@ -144,7 +161,7 @@ function seedDemoDb(): DemoDb {
     { id: "demo-r-03", title: "Filament Starter Pack", description: "A sample reward bundle for an upcoming partner campaign.", prizeType: "product", tier: "regular", worth: 79900, sponsor: "Partner preview", cycle: "Sample campaign", status: "open", active: true, createdAt: daysAgo(9) },
   ];
 
-  return { products, orders: sampleOrders, prizes, assignments: [], leads: [], whatsappMessages: [], settings: { ...demoSettings } };
+  return { products, orders: sampleOrders, prizes, assignments: [], leads: [], whatsappMessages: [], campaigns: [], rewardTokens: [], settings: { ...demoSettings } };
 }
 
 function readDb(): DemoDb {
@@ -162,6 +179,8 @@ function readDb(): DemoDb {
     ...(parsed as DemoDb),
     leads: Array.isArray((parsed as Partial<DemoDb>).leads) ? (parsed as DemoDb).leads : [],
     whatsappMessages: Array.isArray((parsed as Partial<DemoDb>).whatsappMessages) ? (parsed as DemoDb).whatsappMessages : [],
+    campaigns: Array.isArray((parsed as Partial<DemoDb>).campaigns) ? (parsed as DemoDb).campaigns : [],
+    rewardTokens: Array.isArray((parsed as Partial<DemoDb>).rewardTokens) ? (parsed as DemoDb).rewardTokens : [],
   };
 }
 
@@ -208,8 +227,26 @@ function customersFrom(orders: Order[]): DemoCustomer[] {
       paidOrders: paidOrders.length,
       spend: paidOrders.reduce((sum, item) => sum + item.total, 0),
       joinedAt: order.createdAt,
+      marketingOptIn: (order as DemoOrder).marketingOptIn === true,
     };
   });
+}
+
+function productSales(db: DemoDb, product: DemoProduct): DemoProduct {
+  const sold = db.orders
+    .filter((order) => order.paymentStatus === "paid")
+    .flatMap((order) => order.createdAt ? order.items.map((item) => ({ order, item })) : [])
+    .filter(({ item }) => item.productId === product.id);
+  const recentSoldCount = sold
+    .filter(({ order }) => Date.now() - new Date(order.createdAt).getTime() <= 30 * 86_400_000)
+    .reduce((sum, { item }) => sum + item.qty, 0);
+  const soldCount = sold.reduce((sum, { item }) => sum + item.qty, 0);
+  return {
+    ...product,
+    soldCount,
+    recentSoldCount,
+    trendTag: recentSoldCount >= 3 ? "Hot" : soldCount >= 10 ? "Best seller" : undefined,
+  };
 }
 
 function makeSlug(name: string): string {
@@ -269,6 +306,25 @@ export async function demoApiRequest<T>(
   const route = url.pathname.replace(/\/+$/, "") || "/";
   const payload = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
 
+  if (route === "/api/rewards/reveal") {
+    const token = String(url.searchParams.get("token") ?? payload.token ?? "");
+    const db = readDb();
+    const entry = db.rewardTokens.find((reward) => reward.token === token);
+    if (!entry) badRequest("Reward not found or no longer active.", 404);
+    if (method === "POST") {
+      entry.revealed = true;
+      writeDb(db);
+    }
+    if (!entry.revealed) return jsonResponse({ revealed: false }) as T;
+    const prize = db.prizes.find((item) => item.id === entry.prizeId);
+    if (!prize) badRequest("Reward not found.", 404);
+    return jsonResponse({
+      revealed: true, title: prize.title, description: prize.description,
+      worth: prize.worth, prizeType: prize.prizeType, sponsor: prize.sponsor,
+      voucherCode: prize.voucherCode ?? null,
+    }) as T;
+  }
+
   if (route === "/api/admin/login" && method === "POST") {
     const email = String(payload.email ?? "").trim().toLowerCase();
     const password = String(payload.password ?? "");
@@ -296,7 +352,7 @@ export async function demoApiRequest<T>(
 
   const db = readDb();
   if (route === "/api/products" && method === "GET") {
-    return jsonResponse({ products: db.products.filter((product) => product.active) }) as T;
+    return jsonResponse({ products: db.products.filter((product) => product.active).map((product) => productSales(db, product)) }) as T;
   }
   if (route === "/api/settings" && method === "GET") {
     return jsonResponse({ settings: db.settings }) as T;
@@ -324,7 +380,7 @@ export async function demoApiRequest<T>(
     const customerCode = `3DP-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     const now = new Date().toISOString();
     const orderNumber = `DPC-DEMO-${Date.now().toString().slice(-6)}`;
-    const order: Order = {
+    const order: DemoOrder = {
       id: orderNumber,
       orderNumber,
       customerId: customerCode,
@@ -345,6 +401,7 @@ export async function demoApiRequest<T>(
       paymentStatus: "pending",
       uid: customerCode,
       createdAt: now,
+      marketingOptIn: Boolean(contact.marketingOptIn),
       items: products.map(({ product, quantity }) => ({
         productId: product.id,
         name: product.name,
@@ -411,8 +468,76 @@ export async function demoApiRequest<T>(
     }) as T;
   }
 
+  if (route === "/api/admin/insights" && method === "GET") {
+    const paidOrders = db.orders.filter((order) => order.paymentStatus === "paid");
+    const enquiries = db.leads.filter((lead) => lead.isBusinessEnquiry);
+    const conversions = enquiries.filter((lead) => lead.customer);
+    const byDay = new Map<string, number>();
+    for (const order of paidOrders) {
+      const day = order.createdAt.slice(0, 10);
+      byDay.set(day, (byDay.get(day) ?? 0) + 1);
+    }
+    const products = db.products.map((product) => {
+      const sales = paidOrders.flatMap((order) => order.items.filter((item) => item.productId === product.id).map((item) => ({ order, item })));
+      const units = sales.reduce((sum, { item }) => sum + item.qty, 0);
+      const recentUnits = sales.filter(({ order }) => Date.now() - new Date(order.createdAt).getTime() <= 30 * 86_400_000).reduce((sum, { item }) => sum + item.qty, 0);
+      return {
+        id: product.id, name: product.name, units, recentUnits,
+        revenue: sales.reduce((sum, { item }) => sum + (item.lineTotal ?? item.price * item.qty), 0),
+        trendTag: recentUnits >= 3 ? "Hot" : units >= 10 ? "Best seller" : null,
+      };
+    }).sort((a, b) => b.units - a.units).slice(0, 20);
+    return jsonResponse({
+      summary: {
+        enquiries: enquiries.length, conversions: conversions.length,
+        conversionRate: enquiries.length ? Math.round(conversions.length * 1000 / enquiries.length) / 10 : 0,
+        paidOrders: paidOrders.length, revenue: paidOrders.reduce((sum, order) => sum + order.total, 0),
+      },
+      dailyPaidOrders: [...byDay].map(([day, count]) => ({ day, count })),
+      enquiryHeatmap: [],
+      products,
+    }) as T;
+  }
+
+  if (route === "/api/admin/campaigns/audience" && method === "GET") {
+    const customers = customersFrom(db.orders).filter((customer) => customer.marketingOptIn && customer.phone);
+    return jsonResponse({ count: customers.length, customers: customers.map(({ customerCode, name, email, phone }) => ({ customerCode, name, email, phone })) }) as T;
+  }
+  if (route === "/api/admin/campaigns" && method === "GET") {
+    return jsonResponse({ campaigns: db.campaigns.map(({ recipientCodes: _codes, ...campaign }) => campaign) }) as T;
+  }
+  if (route === "/api/admin/campaigns" && method === "POST") {
+    const message = String(payload.message ?? "").trim();
+    if (!message) badRequest("Campaign message is required.");
+    if (!/\b(?:stop|unsubscribe|opt[\s-]?out)\b/i.test(message)) badRequest("Add an opt-out instruction such as Reply STOP.");
+    const audience = customersFrom(db.orders).filter((customer) => customer.marketingOptIn && customer.phone);
+    if (!audience.length) badRequest("There are no opted-in customers in the demo data.");
+    const campaign: DemoCampaign = {
+      id: `demo-campaign-${crypto.randomUUID()}`, message,
+      recipientCount: audience.length, sentCount: 0, failedCount: 0, skippedCount: 0,
+      createdAt: new Date().toISOString(), recipientCodes: audience.map((customer) => customer.customerCode),
+    };
+    db.campaigns.unshift(campaign);
+    writeDb(db);
+    const { recipientCodes: _codes, ...response } = campaign;
+    return jsonResponse({ campaign: response }) as T;
+  }
+  const demoCampaignMatch = route.match(/^\/api\/admin\/campaigns\/([^/]+)\/send$/);
+  if (demoCampaignMatch && method === "POST") {
+    const campaign = db.campaigns.find((item) => item.id === decodeURIComponent(demoCampaignMatch[1]));
+    if (!campaign) badRequest("Campaign not found.", 404);
+    const processed = Math.min(20, campaign.recipientCount - campaign.sentCount - campaign.failedCount - campaign.skippedCount);
+    campaign.sentCount += processed;
+    writeDb(db);
+    return jsonResponse({
+      campaignId: campaign.id, processed, sentCount: campaign.sentCount,
+      failedCount: campaign.failedCount, skippedCount: campaign.skippedCount,
+      remaining: campaign.recipientCount - campaign.sentCount - campaign.failedCount - campaign.skippedCount,
+    }) as T;
+  }
+
   if (route === "/api/admin/products" && method === "GET") {
-    return jsonResponse({ products: db.products }) as T;
+    return jsonResponse({ products: db.products.map((product) => productSales(db, product)) }) as T;
   }
   if (route === "/api/admin/products" && method === "POST") {
     const product = makeProduct(`demo-p-${crypto.randomUUID()}`, payload);
@@ -454,11 +579,12 @@ export async function demoApiRequest<T>(
     const order = db.orders.find((item) => item.orderNumber === orderNumber);
     if (!order) badRequest("Order not found.", 404);
     const orderStatus = String(payload.orderStatus ?? order.orderStatus) as Order["orderStatus"];
+    const changed = order.orderStatus !== orderStatus;
     order.orderStatus = orderStatus;
     order.status = orderStatus;
     order.updatedAt = new Date().toISOString();
     writeDb(db);
-    return jsonResponse({ order }) as T;
+    return jsonResponse({ order, notifications: { whatsapp: changed ? "not_configured" : "unchanged" } }) as T;
   }
 
   if (route === "/api/admin/customers" && method === "GET") {
@@ -549,6 +675,7 @@ export async function demoApiRequest<T>(
     prize.awardedTo = customer.customerCode;
     prize.awardedToName = customer.name;
     prize.awardedAt = new Date().toISOString();
+    const rewardToken = crypto.randomUUID().replace(/-/g, "");
     const assignment: DemoAssignment = {
       id: `demo-a-${crypto.randomUUID()}`,
       prizeId: prize.id,
@@ -559,8 +686,14 @@ export async function demoApiRequest<T>(
       assignedBy: "Demo administrator",
       notificationStatus: "demo_only",
       assignedAt: new Date().toISOString(),
+      revealUrl: `/reward/${rewardToken}`,
       notes: String(payload.notes ?? ""),
     };
+    db.rewardTokens.push({
+      token: rewardToken,
+      prizeId: prize.id,
+      revealed: false,
+    });
     db.assignments.unshift(assignment);
     writeDb(db);
     return jsonResponse({ assignment }) as T;

@@ -37,10 +37,11 @@ export function ProductCard({ product }: { product: Product }) {
             }}
           />
         )}
-        {product.badge && (
-          <span className="absolute left-3 top-3 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.14em] text-white/85 backdrop-blur">
-            {product.badge}
-          </span>
+        {(product.badge || product.trendTag) && (
+          <div className="absolute left-3 top-3 flex flex-col items-start gap-1">
+            {product.badge && <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.14em] text-white/85 backdrop-blur">{product.badge}</span>}
+            {product.trendTag && <span className="rounded-full border border-sun/25 bg-ink-950/75 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-sun backdrop-blur">{product.trendTag}</span>}
+          </div>
         )}
         <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[9.5px] font-semibold text-white/70 backdrop-blur">
           <Box className="h-3 w-3" /> 3D

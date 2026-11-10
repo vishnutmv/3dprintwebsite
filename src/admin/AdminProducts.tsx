@@ -351,7 +351,8 @@ export function AdminProducts() {
                         </span>
                         <div>
                           <p className="font-medium text-white/85">{product.name}</p>
-                          <p className="text-[10.5px] text-white/30">/{product.slug}</p>
+                          <p className="text-[10.5px] text-white/30">/{product.slug} · {product.soldCount ?? 0} paid unit(s)</p>
+                          {(product.badge || product.trendTag) && <div className="mt-1 flex flex-wrap gap-1">{product.badge && <span className="chip">{product.badge}</span>}{product.trendTag && <span className="chip text-sun">{product.trendTag}</span>}</div>}
                         </div>
                       </div>
                     </td>

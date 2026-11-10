@@ -176,6 +176,13 @@ function process_whatsapp_lead(
     $pdo = db();
     $pdo->beginTransaction();
     try {
+        if (
+            $phone !== null
+            && preg_match('/^\s*(?:stop|unsubscribe|opt\s*out|remove\s*me)[.! ]*$/i', $message) === 1
+        ) {
+            $customer = find_customer_by_phone($phone);
+            if ($customer) run('UPDATE customers SET marketing_opt_in=0 WHERE id=?', [$customer['id']]);
+        }
         run('DELETE FROM whatsapp_processed_messages WHERE received_at < UTC_TIMESTAMP() - INTERVAL 30 DAY');
         $inserted = run(
             'INSERT IGNORE INTO whatsapp_processed_messages (message_id, received_at) VALUES (?, ?)',
@@ -381,7 +388,7 @@ function send_whatsapp_text(string $chatId, string $body): bool
             'message' => $body,
             'previewLink' => false,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        'timeout' => 15,
+        'timeout' => 8,
         'ignore_errors' => true,
     ]]);
     $response = @file_get_contents(
@@ -411,6 +418,24 @@ function send_whatsapp_admin_message(string $chatId, string $name, ?string $phon
         fail(502, 'WhatsApp could not send the message. Check the WaAPI connection and try again.');
     }
 
+    record_whatsapp_outbound_message($chatId, $name, $phone, $body);
+}
+
+function send_whatsapp_notification(string $phone, string $name, string $body): bool
+{
+    $digits = preg_replace('/\D/', '', $phone);
+    if (!preg_match('/^\d{6,20}$/', (string)$digits)) {
+        error_log('[interserver-api] WhatsApp notification skipped for an invalid customer phone number.');
+        return false;
+    }
+    $chatId = whatsapp_chat_id_from_phone($phone);
+    if (!send_whatsapp_text($chatId, $body)) return false;
+    record_whatsapp_outbound_message($chatId, $name, $phone, $body);
+    return true;
+}
+
+function record_whatsapp_outbound_message(string $chatId, string $name, ?string $phone, string $body): void
+{
     $pdo = db();
     $pdo->beginTransaction();
     try {

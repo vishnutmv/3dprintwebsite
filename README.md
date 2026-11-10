@@ -7,8 +7,9 @@ React, TypeScript and Vite storefront on Vercel, with a PHP 8.2 API, MariaDB and
 - Product catalogue, product details, cart, checkout and order confirmation.
 - Server-priced orders, customer codes, order history, Razorpay signature checks, payment webhooks, and idempotent payment status updates.
 - Admin login and protected PHP product, order, customer, prize, settings and media endpoints.
-- Manual prize assignment, configurable email/webhook notifications, and trigger-based WaAPI enquiry capture with saved chat history, admin replies, product/price replies and a five-minute follow-up. WhatsApp order, prize and promotional notifications are not included.
-- Optional marketing consent collected at checkout and stored on the customer record.
+- Manual prize assignment with a private scratch-to-reveal link, WhatsApp order/prize status messages, and trigger-based enquiry capture with saved chat history, admin replies and a five-minute follow-up.
+- Consent-based, text-only WhatsApp campaigns in admin batches; order and lead conversion insights; computed paid-product trend tags; and payment-confirmed PDF invoice emails/downloads.
+- Optional marketing consent collected at checkout and stored on the customer record. A customer can reply `STOP` to disable future campaigns for their matched customer phone.
 - MariaDB stores business records. PHP sessions protect admin routes; media files are stored under `uploads/`.
 
 The storefront is not ready to accept real payments: live Razorpay keys are rejected by design. Legal, tax, shipping and refund terms are draft copy and need client/professional review before launch.
@@ -86,6 +87,8 @@ The TypeScript files under `api/` and Supabase migrations are historical referen
 | `razorpay_webhook_secret` | Server only | Verifies Razorpay webhook signatures |
 | `resend_api_key`, `notify_from` | Server only, optional | Resend email delivery |
 | `notify_webhook_url` | Server only, optional | Trusted notification relay you control |
+| `storefront_url` | Server only | Public HTTPS storefront used for prize reveal links |
+| `waapi_instance_id`, `waapi_api_token` | Server only, optional | WaAPI outbound customer messages and opt-in campaign sends |
 
 Use a unique, strong admin password. If optional notification credentials are absent, prize/order messages are not delivered and the API reports `not_configured`. A generic webhook is only a transport hook; it is not a WhatsApp integration until connected to and tested with an authorized WhatsApp provider.
 
@@ -105,6 +108,10 @@ Do not use live payment details for demo testing.
 - All `/api/admin/*` routes validate the expiring HttpOnly, SameSite PHP session cookie on the server.
 - Add and edit products, manage stock/media, review orders/payments, inspect customer IDs/order histories, and create prizes/vouchers.
 - Assign prizes manually. The recipient notification status is recorded; check the status before promising delivery.
+- Order status changes send distinct WhatsApp message layouts only when the status actually changes. WaAPI failures and missing configuration are reported in the admin order update.
+- **Insights** uses verified paid orders and tracked WhatsApp enquiry conversions. Product trend tags are computed from paid sales; they do not overwrite the manual product badge.
+- **Campaigns** only snapshots customers who consented to marketing and have a phone number. Each send action processes up to 3 recipients to limit request duration on shared hosting. Failed messages are shown and are not automatically retried; campaigns are text-only.
+- A payment-confirmed order page prepares a PDF invoice and emails it to the checkout email through Resend. The invoice can also be downloaded from the order page. Configure email delivery before relying on invoice email.
 - WhatsApp enquiries appear under **WhatsApp Leads**. New enquiries are highlighted in the admin navigation; taking over a lead disables the automatic reply until the lead is reopened.
 - Product and prize media are public-read URLs. Do not upload personal/sensitive customer media to public buckets.
 
@@ -112,11 +119,11 @@ Do not use live payment details for demo testing.
 
 The backend can receive WaAPI `message` events and send replies through the WaAPI instance API. It tracks direct chats and saves their WhatsApp chat ID, optional phone number, profile name and message history; duplicate webhook deliveries are ignored. A response is triggered only when an incoming text includes `3dprintco`, `@3dprintco`, or `/3dprintco` followed by a query. Other incoming chats are recorded for admin visibility but do not get an automated reply or follow-up. The admin inbox defaults to **Business enquiries** and can be switched to **All chats**. Triggered enquiries receive a product-and-shop-link reply (up to three active, in-stock products and current prices); this is a fixed automatic message, not an AI-generated answer, and is limited to once per 24 hours per lead. If no admin actually replies within five minutes, one follow-up is sent; a later triggered message starts a new timer. The admin can reply from the lead inbox, orders, or customer records. Messages sent from the connected WhatsApp app are also synced when WaAPI emits their message events. Taking over suppresses the initial automatic reply, but only an actual admin message cancels the five-minute follow-up.
 
-This is the enquiry flow only; it does not send promotional broadcasts or order/prize notifications. WaAPI is a third-party WhatsApp Web-based provider, not Meta's official Cloud API. Review WaAPI's current billing, security, service terms and WhatsApp policies: using an unofficial automation provider can risk session interruption or restrictions on the WhatsApp number. Do not assume it is free.
+WaAPI is a third-party WhatsApp Web-based provider, not Meta's official Cloud API. Review WaAPI's current billing, security, service terms and WhatsApp policies: using an unofficial automation provider can risk session interruption or restrictions on the WhatsApp number. Do not assume it is free. Campaigns are text-only and must only be sent to customers with recorded marketing consent.
 
 To connect the active WaAPI instance:
 
-1. Apply [`migrations/0009_whatsapp_leads.sql`](./migrations/0009_whatsapp_leads.sql), [`migrations/0010_waapi_leads.sql`](./migrations/0010_waapi_leads.sql), [`migrations/0011_whatsapp_conversations.sql`](./migrations/0011_whatsapp_conversations.sql), then [`migrations/0012_whatsapp_business_triggers.sql`](./migrations/0012_whatsapp_business_triggers.sql), to an existing MariaDB database. Skip migrations already successfully applied; for a fresh import, `database/interserver.sql` includes the current schema.
+1. For an existing MariaDB database, apply migrations in order, skipping any already successfully applied: [`migrations/0009_whatsapp_leads.sql`](./migrations/0009_whatsapp_leads.sql), [`migrations/0010_waapi_leads.sql`](./migrations/0010_waapi_leads.sql), [`migrations/0011_whatsapp_conversations.sql`](./migrations/0011_whatsapp_conversations.sql), [`migrations/0012_whatsapp_business_triggers.sql`](./migrations/0012_whatsapp_business_triggers.sql), then [`migrations/0013_rewards_campaigns_invoices.sql`](./migrations/0013_rewards_campaigns_invoices.sql). If phpMyAdmin reports a duplicate column, stop and inspect the existing table/columns before retrying; do not re-run the whole migration blindly. For a fresh import, `database/interserver.sql` includes the current schema.
 2. Generate long random webhook and cron secrets (each at least 32 characters). On InterServer, add these values to the private `api/config.php`; keep the API token and secrets server-side, never in frontend code or chat:
 
    ```php
@@ -139,6 +146,7 @@ To connect the active WaAPI instance:
 
    This is required for the single follow-up after five minutes. If you do not want scheduled follow-ups, do not add this cron job.
 6. Deploy the changed PHP backend files and frontend. Confirm the storefront `/api/settings` response includes a non-empty `whatsappContactUrl`, then send a test enquiry from a separate WhatsApp account. Check that the product reply has current prices and that the lead appears in `/admin/leads`. Open **Chat from admin** to view the saved conversation and reply. Test replying from the admin panel and from the connected WhatsApp phone; both should appear in the conversation.
+7. Test a sandbox order and verify the payment confirmation message and invoice email, update its status once and verify the matching status template, then award a test prize and open its scratch-card link. In admin, verify **Insights** uses paid orders and **Campaigns** only contains opted-in customers. Send campaign batches only after you are ready to message those customers.
 
 The lead inbox stores the latest message per WhatsApp chat ID, including WhatsApp privacy-preserving LIDs. Such IDs may not have a directly openable `wa.me` link; WaAPI can still reply to the incoming chat ID. A message from a person after a lead was closed reopens the lead. Apply the project's privacy/retention policy before production use.
 

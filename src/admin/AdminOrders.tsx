@@ -74,12 +74,21 @@ export function AdminOrders() {
   const applyStatus = async (order: AdminOrder, status: string) => {
     setSavingStatus(true);
     try {
-      const updated = await updateOrderStatus(order.orderNumber, status);
+      const { order: updated, notifications } = await updateOrderStatus(order.orderNumber, status);
       setOrders((current) =>
         current.map((item) => (item.orderNumber === updated.orderNumber ? updated : item)),
       );
       setSelected(updated);
-      toast(`${updated.orderNumber} → ${status}`);
+      toast(
+        notifications.whatsapp === "failed"
+          ? `${updated.orderNumber} updated, but WhatsApp notification failed.`
+          : notifications.whatsapp === "not_configured"
+            ? `${updated.orderNumber} updated; WhatsApp is not configured.`
+            : notifications.whatsapp === "unchanged"
+              ? `${updated.orderNumber} already had that status; no duplicate notification sent.`
+            : `${updated.orderNumber} → ${status}`,
+        notifications.whatsapp === "failed" || notifications.whatsapp === "not_configured" ? "warn" : "success",
+      );
     } catch (caught) {
       toast(caught instanceof Error ? caught.message : "Could not update status", "error");
     } finally {

@@ -115,6 +115,13 @@ function product_out(array $row): array
         if ($row[$key] !== null && $row[$key] !== '') {
             $result[$output] = $key === 'mrp' ? (int)$row[$key] : $row[$key];
         }
+        if (array_key_exists('sold_count', $row)) {
+            $sold = (int)$row['sold_count'];
+            $recent = (int)($row['recent_sold_count'] ?? 0);
+            $result['soldCount'] = $sold;
+            $result['recentSoldCount'] = $recent;
+            $result['trendTag'] = $recent >= 3 ? 'Hot' : ($sold >= 10 ? 'Best seller' : null);
+        }
     }
     if (array_key_exists('is_active', $row)) {
         $result['active'] = (bool)$row['is_active'];

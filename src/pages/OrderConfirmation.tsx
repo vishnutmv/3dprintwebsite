@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Loader2, Lock, RefreshCw } from "lucide-react";
+import { Download, Loader2, Lock, RefreshCw } from "lucide-react";
 import { StatusPill } from "@/components/ui";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import { inr } from "@/lib/format";
 import {
   createPaymentSession,
@@ -16,6 +16,7 @@ import {
   rememberOrderCode,
 } from "@/lib/customer";
 import { demoMode } from "@/lib/demo-mode";
+import { createInvoicePdf, invoicePdfBase64 } from "@/lib/invoice";
 import { useStore } from "@/lib/store";
 import type { Order } from "@/lib/types";
 
@@ -41,6 +42,9 @@ export function OrderConfirmation() {
   const [error, setError] = useState("");
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState("");
+  const [invoiceStatus, setInvoiceStatus] = useState("");
+  const [invoiceSending, setInvoiceSending] = useState(false);
+  const invoiceAttempted = useRef(false);
 
   const load = useCallback(async () => {
     if (!orderNumber) {
@@ -72,6 +76,31 @@ export function OrderConfirmation() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const emailInvoice = useCallback(async (currentOrder: Order) => {
+    if (!code || currentOrder.paymentStatus !== "paid") return;
+    setInvoiceSending(true);
+    setInvoiceStatus("Preparing your PDF invoice…");
+    try {
+      const pdf = createInvoicePdf(currentOrder);
+      await apiPost<{ sent: boolean }>("/api/invoices/send", {
+        orderNumber: currentOrder.orderNumber,
+        customerCode: code,
+        pdfBase64: invoicePdfBase64(pdf),
+      });
+      setInvoiceStatus(`Invoice emailed to ${currentOrder.email || "your checkout email"}.`);
+    } catch (caught) {
+      setInvoiceStatus(caught instanceof Error ? caught.message : "The invoice email could not be sent.");
+    } finally {
+      setInvoiceSending(false);
+    }
+  }, [code]);
+
+  useEffect(() => {
+    if (!order || order.paymentStatus !== "paid" || demoMode || invoiceAttempted.current) return;
+    invoiceAttempted.current = true;
+    void emailInvoice(order);
+  }, [emailInvoice, order]);
 
   const retryPayment = async () => {
     if (!order) return;
@@ -241,6 +270,15 @@ export function OrderConfirmation() {
         )}
 
         <div className="flex flex-wrap gap-3">
+          {paid && (
+            <button
+              type="button"
+              onClick={() => createInvoicePdf(order).save(`invoice-${order.orderNumber}.pdf`)}
+              className="btn-glass"
+            >
+              <Download className="h-4 w-4" /> Download invoice PDF
+            </button>
+          )}
           {canRetry && (
             <button
               type="button"
@@ -264,6 +302,16 @@ export function OrderConfirmation() {
             My orders
           </Link>
         </div>
+        {paid && (
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-white/45">
+            <span>{invoiceSending ? <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> : null}{invoiceStatus || "Preparing invoice email…"}</span>
+            {invoiceStatus && !invoiceStatus.startsWith("Invoice emailed") && (
+              <button type="button" onClick={() => void emailInvoice(order)} disabled={invoiceSending} className="text-violet-200 underline underline-offset-2 disabled:opacity-50">
+                Retry email
+              </button>
+            )}
+          </div>
+        )}
       </motion.div>
     </div>
   );

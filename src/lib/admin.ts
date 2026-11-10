@@ -76,7 +76,40 @@ export type AdminAssignment = {
   notificationStatus: string;
   assignedAt: string;
   releasedAt?: string;
+  revealUrl?: string;
   notes: string;
+};
+
+export type AdminCampaign = {
+  id: string;
+  message: string;
+  recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  skippedCount: number;
+  createdAt: string;
+};
+
+export type CampaignBatchResult = {
+  campaignId: string;
+  processed: number;
+  sentCount: number;
+  failedCount: number;
+  skippedCount: number;
+  remaining: number;
+};
+
+export type AdminInsights = {
+  summary: {
+    enquiries: number;
+    conversions: number;
+    conversionRate: number;
+    paidOrders: number;
+    revenue: number;
+  };
+  dailyPaidOrders: { day: string; count: number }[];
+  enquiryHeatmap: { weekday: number; hour: number; count: number }[];
+  products: { id: string; name: string; units: number; recentUnits: number; revenue: number; trendTag: string | null }[];
 };
 
 export type AdminPrize = Prize & {
@@ -207,6 +240,31 @@ export function getStats(): Promise<AdminStats> {
   return adminGet<AdminStats>("/api/admin/stats");
 }
 
+export function getInsights(): Promise<AdminInsights> {
+  return adminGet<AdminInsights>("/api/admin/insights");
+}
+
+export function getCampaignAudience(): Promise<{
+  count: number;
+  customers: { customerCode: string; name: string; email: string; phone: string }[];
+}> {
+  return adminGet("/api/admin/campaigns/audience");
+}
+
+export async function getCampaigns(): Promise<AdminCampaign[]> {
+  const response = await adminGet<{ campaigns: AdminCampaign[] }>("/api/admin/campaigns");
+  return response.campaigns;
+}
+
+export async function createCampaign(message: string): Promise<AdminCampaign> {
+  const response = await adminPost<{ campaign: AdminCampaign }>("/api/admin/campaigns", { message });
+  return response.campaign;
+}
+
+export function sendCampaignBatch(id: string): Promise<CampaignBatchResult> {
+  return adminPost(`/api/admin/campaigns/${encodeURIComponent(id)}/send`, {});
+}
+
 /* ---------------------------- Products ----------------------------- */
 
 export async function getProducts(): Promise<AdminProduct[]> {
@@ -253,12 +311,15 @@ export async function getOrders(filters: OrderFilters = {}): Promise<AdminOrder[
   return response.orders;
 }
 
-export async function updateOrderStatus(orderNumber: string, orderStatus: string): Promise<AdminOrder> {
-  const response = await adminPatch<{ order: AdminOrder }>(
+export async function updateOrderStatus(
+  orderNumber: string,
+  orderStatus: string,
+): Promise<{ order: AdminOrder; notifications: { whatsapp: "sent" | "failed" | "not_configured" | "unchanged" } }> {
+  const response = await adminPatch<{ order: AdminOrder; notifications: { whatsapp: "sent" | "failed" | "not_configured" | "unchanged" } }>(
     `/api/admin/orders/${encodeURIComponent(orderNumber)}`,
     { orderStatus },
   );
-  return response.order;
+  return response;
 }
 
 /* --------------------------- Customers ----------------------------- */

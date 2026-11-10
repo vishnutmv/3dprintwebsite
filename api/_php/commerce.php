@@ -80,6 +80,7 @@ function mark_paid(string $razorOrderId, string $paymentId): ?array
 {
     $pdo = db();
     $pdo->beginTransaction();
+    $newlyPaid = false;
     try {
         $order = one('SELECT * FROM orders WHERE razorpay_order_id = ? FOR UPDATE', [$razorOrderId]);
         if (!$order) {
@@ -87,6 +88,7 @@ function mark_paid(string $razorOrderId, string $paymentId): ?array
             return null;
         }
         if ($order['payment_status'] !== 'paid') {
+            $newlyPaid = true;
             run('UPDATE payments SET status="paid",gateway_payment_id=?,payment_signature_verified=1 WHERE order_id=?', [$paymentId, $order['id']]);
             $items = all('SELECT product_id,quantity FROM order_items WHERE order_id=? AND product_id IS NOT NULL', [$order['id']]);
             foreach ($items as $item) {
@@ -105,7 +107,9 @@ function mark_paid(string $razorOrderId, string $paymentId): ?array
             );
         }
         $pdo->commit();
-        return one('SELECT * FROM orders WHERE id=?', [$order['id']]);
+        $updated = one('SELECT * FROM orders WHERE id=?', [$order['id']]);
+        if ($updated) $updated['_newly_paid'] = $newlyPaid;
+        return $updated;
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         throw $e;
@@ -134,12 +138,70 @@ function mapped_details(array $details): array
     return order_out($details['order'], $details['customer'], $details['items']);
 }
 
+function paid_order_whatsapp_text(array $details, string $paymentId): string
+{
+    $order = $details['order'];
+    $customer = $details['customer'];
+    $itemLines = [];
+    foreach (array_slice($details['items'], 0, 4) as $item) {
+        $itemLines[] = '│ ' . (int)$item['quantity'] . ' × ' . text_value($item['product_name'], 70);
+    }
+    if (count($details['items']) > 4) $itemLines[] = '│ + more items';
+    return 'Hi ' . text_value($customer['full_name'] ?? 'there', 100) . ",\n\n"
+        . "╭─ ✅ PAYMENT CONFIRMED\n"
+        . "│ Order: {$order['order_number']}\n"
+        . implode("\n", $itemLines) . "\n"
+        . "│ Total: ₹" . number_format((int)$order['total_amount'] / 100, 2) . "\n"
+        . "│ Payment: Razorpay\n"
+        . "│ Transaction: {$paymentId}\n"
+        . "╰─ Your order is confirmed and being prepared.\n\n"
+        . '— 3D Print Co.';
+}
+
+function send_paid_order_whatsapp(array $details, string $paymentId): void
+{
+    if (!empty($details['customer']['phone'])) {
+        send_whatsapp_notification(
+            (string)$details['customer']['phone'],
+            (string)($details['customer']['full_name'] ?? ''),
+            paid_order_whatsapp_text($details, $paymentId),
+        );
+    }
+}
+
+function reveal_reward(string $token, bool $reveal): array
+{
+    if (!preg_match('/^[a-f0-9]{64}$/i', $token)) fail(404, 'Reward not found.');
+    $assignment = one(
+        'SELECT cp.id,cp.revealed_at,p.title,p.description,p.worth,p.prize_type,p.sponsor,p.voucher_code '
+        . 'FROM customer_prizes cp JOIN prizes p ON p.id=cp.prize_id '
+        . 'WHERE cp.reveal_token=? AND cp.released_at IS NULL LIMIT 1',
+        [strtolower($token)],
+    );
+    if (!$assignment) fail(404, 'Reward not found or no longer active.');
+    if ($reveal && $assignment['revealed_at'] === null) {
+        run('UPDATE customer_prizes SET revealed_at=UTC_TIMESTAMP() WHERE id=? AND revealed_at IS NULL', [$assignment['id']]);
+        $assignment['revealed_at'] = gmdate('Y-m-d H:i:s');
+    }
+    if ($assignment['revealed_at'] === null) return ['revealed' => false];
+    return [
+        'revealed' => true, 'title' => $assignment['title'],
+        'description' => $assignment['description'], 'worth' => (int)$assignment['worth'],
+        'prizeType' => $assignment['prize_type'], 'sponsor' => $assignment['sponsor'],
+        'voucherCode' => $assignment['voucher_code'] ?? null,
+        'revealedAt' => $assignment['revealed_at'],
+    ];
+}
+
 function handle_commerce(string $path, array $parts): bool
 {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     global $config;
     if ($path === 'products' && $method === 'GET') {
-        $sql = 'SELECT * FROM products WHERE is_active=1';
+        $sql = 'SELECT p.*, '
+            . '(SELECT COALESCE(SUM(i.quantity),0) FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.product_id=p.id AND o.payment_status="paid") AS sold_count, '
+            . '(SELECT COALESCE(SUM(i.quantity),0) FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.product_id=p.id AND o.payment_status="paid" AND o.created_at>=UTC_TIMESTAMP()-INTERVAL 30 DAY) AS recent_sold_count '
+            . 'FROM products p WHERE p.is_active=1';
         $values = [];
         $category = text_value($_GET['category'] ?? '', 80);
         if ($category !== '' && $category !== 'All') { $sql .= ' AND category=?'; $values[] = $category; }
@@ -156,7 +218,13 @@ function handle_commerce(string $path, array $parts): bool
     if (($parts[0] ?? '') === 'products' && count($parts) === 2 && $method === 'GET') {
         $id = $parts[1];
         $column = preg_match('/^[0-9a-f-]{36}$/i', $id) ? 'id' : 'slug';
-        $row = one("SELECT * FROM products WHERE is_active=1 AND $column=?", [$id]);
+        $row = one(
+            "SELECT p.*, "
+            . "(SELECT COALESCE(SUM(i.quantity),0) FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.product_id=p.id AND o.payment_status=\"paid\") AS sold_count, "
+            . "(SELECT COALESCE(SUM(i.quantity),0) FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.product_id=p.id AND o.payment_status=\"paid\" AND o.created_at>=UTC_TIMESTAMP()-INTERVAL 30 DAY) AS recent_sold_count "
+            . "FROM products p WHERE p.is_active=1 AND p.$column=?",
+            [$id],
+        );
         if (!$row) fail(404, 'Product not found.');
         header('Cache-Control: public, max-age=30, stale-while-revalidate=120');
         respond(200, ['product' => product_out($row)]);
@@ -164,6 +232,18 @@ function handle_commerce(string $path, array $parts): bool
     if ($path === 'prizes' && $method === 'GET') {
         $rows = all('SELECT * FROM prizes WHERE is_active=1 AND status="open" ORDER BY worth DESC');
         respond(200, ['prizes' => array_map(static fn(array $r): array => prize_out($r, true), $rows)]);
+    }
+
+    if ($path === 'rewards/reveal' && $method === 'GET') {
+        rate_limit('reward-reveal-read', 30, 60);
+        $token = text_value($_GET['token'] ?? '', 64);
+        respond(200, reveal_reward($token, false));
+    }
+    if ($path === 'rewards/reveal' && $method === 'POST') {
+        rate_limit('reward-reveal', 20, 60);
+        $input = body();
+        $token = text_value($input['token'] ?? '', 64);
+        respond(200, reveal_reward($token, true));
     }
     if ($path === 'settings' && $method === 'GET') respond(200, ['settings' => settings_public(store_settings())]);
 
@@ -276,6 +356,52 @@ function handle_commerce(string $path, array $parts): bool
         respond(200, ['order' => mapped_details($details)]);
     }
 
+    if ($path === 'invoices/send' && $method === 'POST') {
+        rate_limit('invoice-email', 6, 300);
+        $input = body();
+        $number = text_value($input['orderNumber'] ?? '', 32);
+        $code = strtoupper(text_value($input['customerCode'] ?? '', 32));
+        $pdf = base64_decode((string)($input['pdfBase64'] ?? ''), true);
+        if (!preg_match('/^ORD-[A-Z0-9]{8}$/', $number) || !preg_match('/^3DP-[A-Z0-9]{4}-[A-Z0-9]{4}$/', $code)) {
+            fail(400, 'A valid order number and customer code are required.');
+        }
+        if (!is_string($pdf) || strlen($pdf) > 2 * 1024 * 1024 || !str_starts_with($pdf, '%PDF-')) {
+            fail(400, 'A valid invoice PDF under 2 MB is required.');
+        }
+        $details = order_details($number);
+        if (!$details || strtoupper((string)($details['customer']['customer_code'] ?? '')) !== $code) fail(404, 'Order not found.');
+        if ($details['order']['payment_status'] !== 'paid') fail(409, 'An invoice is available only after payment is verified.');
+        if (!empty($details['order']['invoice_sent_at'])) respond(200, ['sent' => true, 'alreadySent' => true]);
+        if (empty($details['customer']['email'])) fail(409, 'This order does not have a customer email address.');
+        if (empty($config['resend_api_key']) || empty($config['notify_from'])) fail(503, 'Email delivery is not configured on the server.');
+        $context = stream_context_create(['http' => [
+            'method' => 'POST',
+            'header' => "Authorization: Bearer " . $config['resend_api_key'] . "\r\nContent-Type: application/json\r\n",
+            'content' => json_encode([
+                'from' => $config['notify_from'],
+                'to' => [$details['customer']['email']],
+                'subject' => 'Invoice for order ' . $number,
+                'text' => "Your payment is confirmed. Your invoice is attached.\nOrder: $number\n— 3D Print Co.",
+                'attachments' => [[
+                    'filename' => 'invoice-' . $number . '.pdf',
+                    'content' => base64_encode($pdf),
+                ]],
+            ]),
+            'timeout' => 15, 'ignore_errors' => true,
+        ]]);
+        $response = @file_get_contents('https://api.resend.com/emails', false, $context);
+        $status = 0;
+        foreach (($http_response_header ?? []) as $header) {
+            if (preg_match('/^HTTP\/\S+\s+(\d+)/', $header, $match)) $status = (int)$match[1];
+        }
+        if (!is_string($response) || $status < 200 || $status >= 300) {
+            error_log('[interserver-api] Invoice email provider returned status ' . $status);
+            fail(502, 'The invoice could not be emailed. Download the PDF and try again later.');
+        }
+        run('UPDATE orders SET invoice_sent_at=UTC_TIMESTAMP() WHERE id=? AND invoice_sent_at IS NULL', [$details['order']['id']]);
+        respond(200, ['sent' => true, 'alreadySent' => false]);
+    }
+
     if (($parts[0] ?? '') === 'customers' && count($parts) === 3 && $parts[2] === 'orders' && $method === 'GET') {
         rate_limit('customer-orders', 30, 60);
         $code = strtoupper($parts[1]);
@@ -323,7 +449,8 @@ function handle_commerce(string $path, array $parts): bool
                 fail(402, 'Razorpay reports this payment as failed. Nothing was marked paid.');
             }
             if (!in_array($payment['status'] ?? '', ['captured', 'authorized'], true)) fail(409, 'Payment is not complete yet.');
-            mark_paid($orderId, $paymentId);
+            $settled = mark_paid($orderId, $paymentId);
+            $wasPaid = !$settled || empty($settled['_newly_paid']);
         }
         $details = order_details($order['order_number']);
         if (!$wasPaid && !empty($details['customer']['email'])) {
@@ -333,6 +460,7 @@ function handle_commerce(string $path, array $parts): bool
                 ['orderNumber' => $order['order_number'], 'paymentId' => $paymentId]
             );
         }
+        if (!$wasPaid) send_paid_order_whatsapp($details, $paymentId);
         respond(200, ['order' => mapped_details($details)]);
     }
 
@@ -359,7 +487,8 @@ function handle_commerce(string $path, array $parts): bool
         if ((int)($payment['amount'] ?? $orderEntity['amount'] ?? 0) !== (int)$order['total_amount']) respond(200, ['received' => true, 'ignored' => 'amount_mismatch']);
         if ($rzPaymentId === '') respond(200, ['received' => true, 'ignored' => 'missing_payment_id']);
         $wasPaid = $order['payment_status'] === 'paid';
-        mark_paid($rzOrderId, $rzPaymentId);
+        $settled = mark_paid($rzOrderId, $rzPaymentId);
+        $wasPaid = !$settled || empty($settled['_newly_paid']);
         if (!$wasPaid) {
             $details = order_details($order['order_number']);
             if (!empty($details['customer']['email'])) notify_event(
@@ -367,6 +496,7 @@ function handle_commerce(string $path, array $parts): bool
                 "Payment confirmed. Your order is now being prepared.\n\nOrder: {$order['order_number']}\nCustomer ID: {$details['customer']['customer_code']}\nPaid: ₹" . number_format((int)$order['total_amount'] / 100, 2) . "\nRazorpay payment: $rzPaymentId\n\n— 3D Print Co.",
                 ['orderNumber' => $order['order_number'], 'paymentId' => $rzPaymentId]
             );
+            send_paid_order_whatsapp($details, $rzPaymentId);
         }
         respond(200, ['received' => true]);
     }
