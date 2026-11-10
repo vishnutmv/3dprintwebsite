@@ -7,7 +7,7 @@ React, TypeScript and Vite storefront on Vercel, with a PHP 8.2 API, MariaDB and
 - Product catalogue, product details, cart, checkout and order confirmation.
 - Server-priced orders, customer codes, order history, Razorpay signature checks, payment webhooks, and idempotent payment status updates.
 - Admin login and protected PHP product, order, customer, prize, settings and media endpoints.
-- Manual prize assignment, configurable email/webhook notifications, and WaAPI enquiry capture with saved chat history, admin replies, product/price auto-replies and a five-minute follow-up. WhatsApp order, prize and promotional notifications are not included.
+- Manual prize assignment, configurable email/webhook notifications, and trigger-based WaAPI enquiry capture with saved chat history, admin replies, product/price replies and a five-minute follow-up. WhatsApp order, prize and promotional notifications are not included.
 - Optional marketing consent collected at checkout and stored on the customer record.
 - MariaDB stores business records. PHP sessions protect admin routes; media files are stored under `uploads/`.
 
@@ -110,13 +110,13 @@ Do not use live payment details for demo testing.
 
 ## WhatsApp enquiries through WaAPI
 
-The backend can receive WaAPI `message` events and send replies through the WaAPI instance API. It stores the contact's WhatsApp chat ID, optional phone number, profile name and message history; duplicate webhook deliveries are ignored. New enquiries receive an automatic reply with up to three active, in-stock products and current prices, plus a link to the full shop; this initial product reply is limited to once per 24 hours per lead. If no admin actually replies within five minutes, one follow-up is sent; a later customer message starts a new timer. The admin can reply from the lead inbox, orders, or customer records. Messages sent from the connected WhatsApp app are also synced into the inbox when WaAPI emits their message events. Taking over suppresses the initial automatic reply, but only an actual admin message cancels the five-minute follow-up. The admin navigation shows a badge for new leads.
+The backend can receive WaAPI `message` events and send replies through the WaAPI instance API. It tracks direct chats and saves their WhatsApp chat ID, optional phone number, profile name and message history; duplicate webhook deliveries are ignored. A response is triggered only when an incoming text includes `3dprintco`, `@3dprintco`, or `/3dprintco` followed by a query. Other incoming chats are recorded for admin visibility but do not get an automated reply or follow-up. The admin inbox defaults to **Business enquiries** and can be switched to **All chats**. Triggered enquiries receive a product-and-shop-link reply (up to three active, in-stock products and current prices); this is a fixed automatic message, not an AI-generated answer, and is limited to once per 24 hours per lead. If no admin actually replies within five minutes, one follow-up is sent; a later triggered message starts a new timer. The admin can reply from the lead inbox, orders, or customer records. Messages sent from the connected WhatsApp app are also synced when WaAPI emits their message events. Taking over suppresses the initial automatic reply, but only an actual admin message cancels the five-minute follow-up.
 
 This is the enquiry flow only; it does not send promotional broadcasts or order/prize notifications. WaAPI is a third-party WhatsApp Web-based provider, not Meta's official Cloud API. Review WaAPI's current billing, security, service terms and WhatsApp policies: using an unofficial automation provider can risk session interruption or restrictions on the WhatsApp number. Do not assume it is free.
 
 To connect the active WaAPI instance:
 
-1. Apply [`migrations/0009_whatsapp_leads.sql`](./migrations/0009_whatsapp_leads.sql), [`migrations/0010_waapi_leads.sql`](./migrations/0010_waapi_leads.sql), then [`migrations/0011_whatsapp_conversations.sql`](./migrations/0011_whatsapp_conversations.sql), to an existing MariaDB database. For a fresh import, `database/interserver.sql` already includes the current schema.
+1. Apply [`migrations/0009_whatsapp_leads.sql`](./migrations/0009_whatsapp_leads.sql), [`migrations/0010_waapi_leads.sql`](./migrations/0010_waapi_leads.sql), [`migrations/0011_whatsapp_conversations.sql`](./migrations/0011_whatsapp_conversations.sql), then [`migrations/0012_whatsapp_business_triggers.sql`](./migrations/0012_whatsapp_business_triggers.sql), to an existing MariaDB database. Skip migrations already successfully applied; for a fresh import, `database/interserver.sql` includes the current schema.
 2. Generate long random webhook and cron secrets (each at least 32 characters). On InterServer, add these values to the private `api/config.php`; keep the API token and secrets server-side, never in frontend code or chat:
 
    ```php

@@ -38,6 +38,7 @@ export type AdminLead = {
   lastMessage: string;
   lastMessageAt: string;
   status: "new" | "active" | "closed";
+  isBusinessEnquiry: boolean;
   createdAt: string;
   updatedAt: string;
   chatUrl: string;

@@ -158,6 +158,8 @@ CREATE TABLE IF NOT EXISTS whatsapp_leads (
   last_message TEXT NOT NULL,
   last_message_at DATETIME NOT NULL,
   status ENUM('new','active','closed') NOT NULL DEFAULT 'new',
+  is_business_enquiry TINYINT(1) NOT NULL DEFAULT 0,
+  business_enquiry_at DATETIME NULL,
   last_auto_reply_at DATETIME NULL,
   auto_reply_attempted_at DATETIME NULL,
   last_admin_reply_at DATETIME NULL,

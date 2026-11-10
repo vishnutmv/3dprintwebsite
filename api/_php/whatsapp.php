@@ -79,6 +79,7 @@ function handle_whatsapp(string $path): bool
         respond(200, ['received' => true]);
     }
 
+    $isBusinessEnquiry = is_whatsapp_business_enquiry($body);
     process_whatsapp_lead(
         $chatId,
         str_ends_with($chatId, '@c.us') ? substr($chatId, 0, -5) : null,
@@ -87,8 +88,17 @@ function handle_whatsapp(string $path): bool
         $type,
         $body,
         $timestamp,
+        $isBusinessEnquiry,
     );
     respond(200, ['received' => true]);
+}
+
+function is_whatsapp_business_enquiry(string $message): bool
+{
+    return preg_match(
+        '~(?<![A-Za-z0-9])(?:@|/)?3dprintco(?![A-Za-z0-9])\s*[:,\-]?\s*.{2,}~isu',
+        $message,
+    ) === 1;
 }
 
 function process_whatsapp_outbound_message(
@@ -161,6 +171,7 @@ function process_whatsapp_lead(
     string $type,
     string $message,
     string $receivedAt,
+    bool $isBusinessEnquiry,
 ): void {
     $pdo = db();
     $pdo->beginTransaction();
@@ -176,26 +187,46 @@ function process_whatsapp_lead(
         }
 
         $created = run(
-            'INSERT IGNORE INTO whatsapp_leads (id, chat_id, phone_e164, contact_name, last_message, last_message_at, status) VALUES (?, ?, ?, ?, ?, ?, "new")',
-            [new_id(), $chatId, $phone, $name, $message, $receivedAt],
+            'INSERT IGNORE INTO whatsapp_leads (id, chat_id, phone_e164, contact_name, last_message, last_message_at, status, is_business_enquiry, business_enquiry_at) '
+                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, IF(?, ?, NULL))',
+            [
+                new_id(), $chatId, $phone, $name, $message, $receivedAt,
+                $isBusinessEnquiry ? 'new' : 'active',
+                $isBusinessEnquiry ? 1 : 0,
+                $isBusinessEnquiry ? 1 : 0,
+                $receivedAt,
+            ],
         )->rowCount() === 1;
         $existing = one('SELECT * FROM whatsapp_leads WHERE chat_id=? FOR UPDATE', [$chatId]);
         if (!$existing) throw new RuntimeException('WhatsApp lead could not be loaded after saving.');
-        $isNew = $created || $existing['status'] === 'closed';
+        $wasBusinessEnquiry = !$created && (bool)$existing['is_business_enquiry'];
+        $isNewBusinessEnquiry = $isBusinessEnquiry && ($created || !$wasBusinessEnquiry);
+        $status = $existing['status'];
+        if ($isBusinessEnquiry && !$wasBusinessEnquiry && empty($existing['last_admin_reply_at'])) $status = 'new';
+        if ($isBusinessEnquiry && $existing['status'] === 'closed') $status = 'new';
         if (!$created) {
-            $status = $existing['status'] === 'closed' ? 'new' : $existing['status'];
             run(
                 'UPDATE whatsapp_leads SET phone_e164=COALESCE(?, phone_e164), contact_name=IF(?<>"", ?, contact_name), '
                     . 'last_message=IF(? >= last_message_at, ?, last_message), '
-                    . 'last_message_at=GREATEST(last_message_at, ?), status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-                [$phone, $name, $name, $receivedAt, $message, $receivedAt, $status, $existing['id']],
+                    . 'last_message_at=GREATEST(last_message_at, ?), status=?, '
+                    . 'is_business_enquiry=GREATEST(is_business_enquiry, ?), '
+                    . 'business_enquiry_at=IF(?=1, COALESCE(business_enquiry_at, ?), business_enquiry_at), '
+                    . 'updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                [
+                    $phone, $name, $name, $receivedAt, $message, $receivedAt, $status,
+                    $isBusinessEnquiry ? 1 : 0, $isBusinessEnquiry ? 1 : 0, $receivedAt, $existing['id'],
+                ],
             );
         }
-        run(
-            'UPDATE whatsapp_leads SET auto_followup_due_at=DATE_ADD(UTC_TIMESTAMP(), INTERVAL 5 MINUTE), '
-                . 'auto_followup_sent_at=NULL WHERE chat_id=?',
-            [$chatId],
-        );
+        if ($isBusinessEnquiry) {
+            run(
+                'UPDATE whatsapp_leads SET auto_followup_due_at=DATE_ADD(UTC_TIMESTAMP(), INTERVAL 5 MINUTE), '
+                    . 'auto_followup_sent_at=NULL WHERE chat_id=?',
+                [$chatId],
+            );
+        } else {
+            run('UPDATE whatsapp_leads SET auto_followup_due_at=NULL WHERE chat_id=?', [$chatId]);
+        }
         $lead = one('SELECT * FROM whatsapp_leads WHERE chat_id=?', [$chatId]);
         run(
             'INSERT INTO whatsapp_messages (id, lead_id, provider_message_id, direction, message_type, body, created_at) '
@@ -210,7 +241,7 @@ function process_whatsapp_lead(
 
     if (!$lead) throw new RuntimeException('WhatsApp lead was not available after saving.');
 
-    if ($isNew) {
+    if ($isNewBusinessEnquiry) {
         $chatUrl = whatsapp_chat_url($phone);
         $displayPhone = $phone !== null ? '+' . $phone : $chatId;
         $alertStatus = notify_event(
@@ -230,7 +261,7 @@ function process_whatsapp_lead(
         }
     }
 
-    if ($lead['status'] === 'new' && claim_whatsapp_auto_reply((string)$lead['id'])) {
+    if ($isBusinessEnquiry && $lead['status'] === 'new' && claim_whatsapp_auto_reply((string)$lead['id'])) {
         if (send_whatsapp_product_reply($chatId, $name)) {
             run(
                 'UPDATE whatsapp_leads SET last_auto_reply_at=UTC_TIMESTAMP(), auto_reply_attempted_at=NULL WHERE id=?',
@@ -421,13 +452,13 @@ function send_due_whatsapp_followups(): int
 {
     global $config;
     $leads = all(
-        'SELECT id, chat_id FROM whatsapp_leads WHERE auto_followup_due_at<=UTC_TIMESTAMP() '
+        'SELECT id, chat_id FROM whatsapp_leads WHERE is_business_enquiry=1 AND auto_followup_due_at<=UTC_TIMESTAMP() '
             . 'AND auto_followup_sent_at IS NULL ORDER BY auto_followup_due_at LIMIT 25',
     );
     $processed = 0;
     foreach ($leads as $lead) {
         $claim = run(
-            'UPDATE whatsapp_leads SET auto_followup_due_at=NULL WHERE id=? '
+            'UPDATE whatsapp_leads SET auto_followup_due_at=NULL WHERE id=? AND is_business_enquiry=1 '
                 . 'AND auto_followup_due_at<=UTC_TIMESTAMP() AND auto_followup_sent_at IS NULL '
                 . 'AND (last_admin_reply_at IS NULL OR last_admin_reply_at<last_message_at)',
             [$lead['id']],

@@ -6,12 +6,14 @@ import { useToast } from "@/lib/toast";
 import { WhatsAppChat } from "./WhatsAppChat";
 
 type LeadFilter = "all" | AdminLead["status"];
+type ChatFilter = "all" | "business";
 
 export function AdminLeads() {
   const toast = useToast((state) => state.push);
   const [leads, setLeads] = useState<AdminLead[]>([]);
   const [newCount, setNewCount] = useState(0);
   const [filter, setFilter] = useState<LeadFilter>("all");
+  const [chatFilter, setChatFilter] = useState<ChatFilter>("business");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -35,8 +37,11 @@ export function AdminLeads() {
   }, [load]);
 
   const filteredLeads = useMemo(
-    () => (filter === "all" ? leads : leads.filter((lead) => lead.status === filter)),
-    [filter, leads],
+    () => leads.filter((lead) =>
+      (chatFilter === "all" || lead.isBusinessEnquiry)
+      && (filter === "all" || lead.status === filter),
+    ),
+    [chatFilter, filter, leads],
   );
 
   const changeStatus = async (lead: AdminLead, status: AdminLead["status"]) => {
@@ -57,9 +62,9 @@ export function AdminLeads() {
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/35">CRM</p>
-          <h1 className="mt-1.5 text-[clamp(24px,3vw,30px)]">WhatsApp enquiries</h1>
+          <h1 className="mt-1.5 text-[clamp(24px,3vw,30px)]">WhatsApp inbox</h1>
           <p className="mt-1 text-[12.5px] text-white/45">
-            {newCount} new {newCount === 1 ? "enquiry" : "enquiries"} need attention.
+            {newCount} new business {newCount === 1 ? "enquiry" : "enquiries"} need attention.
           </p>
         </div>
         <button type="button" className="btn-glass" onClick={() => void load()} disabled={loading}>
@@ -75,6 +80,24 @@ export function AdminLeads() {
       )}
 
       <div className="mb-4 flex flex-wrap gap-2">
+        {([
+          ["business", "Business enquiries"],
+          ["all", "All chats"],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={`rounded-full border px-3 py-1.5 text-[11px] transition ${
+              chatFilter === value ? "border-mint/35 bg-mint/10 text-mint" : "border-white/10 text-white/50 hover:text-white"
+            }`}
+            onClick={() => setChatFilter(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
         {(["all", "new", "active", "closed"] as const).map((status) => (
           <button
             key={status}
@@ -84,7 +107,7 @@ export function AdminLeads() {
             }`}
             onClick={() => setFilter(status)}
           >
-            {status === "all" ? "All enquiries" : status}
+            {status === "all" ? "All statuses" : status}
             {status === "new" && newCount > 0 ? ` · ${newCount}` : ""}
           </button>
         ))}
@@ -96,7 +119,11 @@ export function AdminLeads() {
         </div>
       ) : filteredLeads.length === 0 ? (
         <div className="glass rounded-3xl p-8 text-center text-[12px] text-white/45">
-          {filter === "all" ? "No WhatsApp enquiries yet." : `No ${filter} enquiries.`}
+          {chatFilter === "business" && !leads.some((lead) => lead.isBusinessEnquiry)
+            ? "No business enquiries yet. Regular chats are visible under All chats."
+            : filteredLeads.length === 0
+              ? "No chats match this status."
+              : "No WhatsApp chats yet."}
         </div>
       ) : (
         <div className="grid gap-3">
@@ -115,6 +142,13 @@ export function AdminLeads() {
                         : "border-white/15 text-white/50"
                     }`}>
                       {lead.status}
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] ${
+                      lead.isBusinessEnquiry
+                        ? "border-mint/30 bg-mint/[0.08] text-mint"
+                        : "border-white/10 text-white/40"
+                    }`}>
+                      {lead.isBusinessEnquiry ? "business enquiry" : "chat · no auto-reply"}
                     </span>
                   </div>
                   <p className="mt-1 font-mono text-[11px] text-white/45">{lead.phone.startsWith("+") || lead.phone.endsWith("@lid") ? lead.phone : `+${lead.phone}`}</p>
