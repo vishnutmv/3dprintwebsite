@@ -112,6 +112,7 @@ export type StoreSettings = {
   razorpayKeyId: string;
   paymentsReady: boolean;
   notifyEmail: string;
+  whatsappContactUrl?: string;
   notifications?: { email: boolean; webhook: boolean };
 };
 

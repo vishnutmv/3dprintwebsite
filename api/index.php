@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/_php/bootstrap.php';
 require __DIR__ . '/_php/commerce.php';
 require __DIR__ . '/_php/admin.php';
+require __DIR__ . '/_php/whatsapp.php';
 
 set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
     if (!(error_reporting() & $severity)) return false;
@@ -30,6 +31,7 @@ $path = implode('/', $segments);
 
 try {
     if (handle_admin($path, $segments)) exit;
+    if (handle_whatsapp($path)) exit;
     if (handle_commerce($path, $segments)) exit;
     fail(404, 'API endpoint not found.');
 } catch (Throwable $error) {

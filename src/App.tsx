@@ -11,6 +11,7 @@ import { Dashboard } from "./admin/Dashboard";
 import { AdminProducts } from "./admin/AdminProducts";
 import { AdminOrders } from "./admin/AdminOrders";
 import { AdminCustomers } from "./admin/AdminCustomers";
+import { AdminLeads } from "./admin/AdminLeads";
 import { AdminPrizes } from "./admin/AdminPrizes";
 import { AdminSettings } from "./admin/AdminSettings";
 import { Home } from "./pages/Home";
@@ -50,6 +51,7 @@ const router = createBrowserRouter([
       { path: "products", element: <AdminProducts /> },
       { path: "orders", element: <AdminOrders /> },
       { path: "customers", element: <AdminCustomers /> },
+      { path: "leads", element: <AdminLeads /> },
       { path: "prizes", element: <AdminPrizes /> },
       { path: "settings", element: <AdminSettings /> },
       { path: "*", element: <Navigate to="/admin" replace /> },

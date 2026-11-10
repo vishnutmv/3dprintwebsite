@@ -34,11 +34,23 @@ type DemoAssignment = {
   releasedAt?: string;
   notes: string;
 };
+type DemoLead = {
+  id: string;
+  phone: string;
+  name: string;
+  lastMessage: string;
+  lastMessageAt: string;
+  status: "new" | "active" | "closed";
+  createdAt: string;
+  updatedAt: string;
+  chatUrl: string;
+};
 type DemoDb = {
   products: DemoProduct[];
   orders: Order[];
   prizes: DemoPrize[];
   assignments: DemoAssignment[];
+  leads: DemoLead[];
   settings: StoreSettings;
 };
 
@@ -121,7 +133,7 @@ function seedDemoDb(): DemoDb {
     { id: "demo-r-03", title: "Filament Starter Pack", description: "A sample reward bundle for an upcoming partner campaign.", prizeType: "product", tier: "regular", worth: 79900, sponsor: "Partner preview", cycle: "Sample campaign", status: "open", active: true, createdAt: daysAgo(9) },
   ];
 
-  return { products, orders: sampleOrders, prizes, assignments: [], settings: { ...demoSettings } };
+  return { products, orders: sampleOrders, prizes, assignments: [], leads: [], settings: { ...demoSettings } };
 }
 
 function readDb(): DemoDb {
@@ -135,7 +147,7 @@ function readDb(): DemoDb {
   if (!parsed || typeof parsed !== "object" || !("products" in parsed) || !("orders" in parsed)) {
     throw new Error("The local demo data is invalid. Clear this site's local storage and reload.");
   }
-  return parsed as DemoDb;
+  return { ...(parsed as DemoDb), leads: Array.isArray((parsed as Partial<DemoDb>).leads) ? (parsed as DemoDb).leads : [] };
 }
 
 function writeDb(db: DemoDb): void {
@@ -448,6 +460,29 @@ export async function demoApiRequest<T>(
     const customer = customersFrom(orders)[0];
     if (!customer) badRequest("Customer not found.", 404);
     return jsonResponse({ customer, orders }) as T;
+  }
+
+  if (route === "/api/admin/leads" && method === "GET") {
+    const leads = [...db.leads].sort((a, b) =>
+      Number(a.status !== "new") - Number(b.status !== "new")
+      || b.updatedAt.localeCompare(a.updatedAt),
+    );
+    return jsonResponse({ leads, newCount: leads.filter((lead) => lead.status === "new").length }) as T;
+  }
+  if (route === "/api/admin/leads/count" && method === "GET") {
+    return jsonResponse({ newCount: db.leads.filter((lead) => lead.status === "new").length }) as T;
+  }
+  const demoLeadMatch = route.match(/^\/api\/admin\/leads\/([^/]+)$/);
+  if (demoLeadMatch && method === "PATCH") {
+    const id = decodeURIComponent(demoLeadMatch[1]);
+    const lead = db.leads.find((item) => item.id === id);
+    if (!lead) badRequest("Lead not found.", 404);
+    const status = payload.status;
+    if (!["new", "active", "closed"].includes(String(status))) badRequest("Unknown lead status.");
+    lead.status = status as DemoLead["status"];
+    lead.updatedAt = new Date().toISOString();
+    writeDb(db);
+    return jsonResponse({ lead }) as T;
   }
 
   if (route === "/api/admin/prizes" && method === "GET") {

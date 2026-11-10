@@ -30,6 +30,18 @@ export type AdminCustomer = {
   joinedAt: string;
 };
 
+export type AdminLead = {
+  id: string;
+  phone: string;
+  name: string;
+  lastMessage: string;
+  lastMessageAt: string;
+  status: "new" | "active" | "closed";
+  createdAt: string;
+  updatedAt: string;
+  chatUrl: string;
+};
+
 export type AdminOrder = Order;
 
 export type AdminAssignment = {
@@ -238,6 +250,25 @@ export async function getCustomers(q = ""): Promise<AdminCustomer[]> {
 
 export function getCustomer(code: string): Promise<{ customer: AdminCustomer; orders: AdminOrder[] }> {
   return adminGet(`/api/admin/customers/${encodeURIComponent(code)}`);
+}
+
+/* ------------------------------- Leads ---------------------------- */
+
+export async function getLeads(): Promise<{ leads: AdminLead[]; newCount: number }> {
+  return adminGet("/api/admin/leads");
+}
+
+export async function getNewLeadCount(): Promise<number> {
+  const response = await adminGet<{ newCount: number }>("/api/admin/leads/count");
+  return response.newCount;
+}
+
+export async function updateLeadStatus(id: string, status: AdminLead["status"]): Promise<AdminLead> {
+  const response = await adminPatch<{ lead: AdminLead }>(
+    `/api/admin/leads/${encodeURIComponent(id)}`,
+    { status },
+  );
+  return response.lead;
 }
 
 /* ----------------------------- Prizes ------------------------------ */

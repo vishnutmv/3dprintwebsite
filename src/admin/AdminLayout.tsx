@@ -6,6 +6,7 @@ import {
   Gift,
   Loader2,
   LogOut,
+  MessageCircle,
   Package,
   Settings2,
   ShieldCheck,
@@ -19,12 +20,14 @@ import { cn } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { useToast } from "@/lib/toast";
 import { demoMode } from "@/lib/demo-mode";
+import { getNewLeadCount } from "@/lib/admin";
 
 const nav = [
   { to: "/admin", label: "Dashboard", icon: Gauge, end: true },
   { to: "/admin/products", label: "Products", icon: Boxes },
   { to: "/admin/orders", label: "Orders", icon: Package },
   { to: "/admin/customers", label: "Customers", icon: Users },
+  { to: "/admin/leads", label: "WhatsApp Leads", icon: MessageCircle },
   { to: "/admin/prizes", label: "Prizes", icon: Gift },
   { to: "/admin/settings", label: "Settings", icon: Settings2 },
 ];
@@ -55,7 +58,7 @@ function LoginScreen() {
         <p className="mt-2 text-[12.5px] leading-relaxed text-white/50">
           {demoMode
             ? "Sign in to the local client preview. All sample changes stay in this browser."
-            : "Sign in with the admin account configured on the server. Products, orders, customers and prize awards live here."}
+            : "Sign in with the admin account configured on the server. Products, orders, customers, WhatsApp enquiries and prize awards live here."}
         </p>
 
         <form className="mt-6" onSubmit={submit}>
@@ -118,6 +121,7 @@ export function AdminLayout() {
   const fetchSettings = useStore((state) => state.fetchSettings);
   const toast = useToast((state) => state.push);
   const location = useLocation();
+  const [newLeadCount, setNewLeadCount] = useState(0);
 
   useEffect(() => {
     if (authenticated) void fetchSettings();
@@ -126,6 +130,25 @@ export function AdminLayout() {
   useEffect(() => {
     if (!initialized) void verify();
   }, [initialized, verify]);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    let active = true;
+    const refreshCount = async () => {
+      try {
+        const count = await getNewLeadCount();
+        if (active) setNewLeadCount(count);
+      } catch (caught) {
+        if (active) console.error("Could not refresh WhatsApp enquiry count:", caught);
+      }
+    };
+    void refreshCount();
+    const interval = window.setInterval(() => void refreshCount(), 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [authenticated, location.pathname]);
 
   const handleSignOut = async () => {
     try {
@@ -168,7 +191,12 @@ export function AdminLayout() {
               }
             >
               <item.icon className="h-4 w-4" />
-              {item.label}
+              <span>{item.label}</span>
+              {item.to === "/admin/leads" && newLeadCount > 0 && (
+                <span className="ml-auto min-w-5 rounded-full bg-sun px-1.5 py-0.5 text-center text-[9px] font-bold text-ink-950">
+                  {newLeadCount > 99 ? "99+" : newLeadCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -218,7 +246,12 @@ export function AdminLayout() {
               }
             >
               <item.icon className="h-3.5 w-3.5" />
-              {item.label}
+              <span>{item.label}</span>
+              {item.to === "/admin/leads" && newLeadCount > 0 && (
+                <span className="rounded-full bg-sun px-1.5 py-0.5 text-[9px] font-bold text-ink-950">
+                  {newLeadCount > 99 ? "99+" : newLeadCount}
+                </span>
+              )}
             </NavLink>
           ))}
           <button

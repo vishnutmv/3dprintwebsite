@@ -260,12 +260,14 @@ function settings_public(array $settings): array
     global $config;
     $key = (string)($config['razorpay_key_id'] ?? '');
     $test = str_starts_with($key, 'rzp_test_') && !empty($config['razorpay_key_secret']);
+    $whatsappNumber = preg_replace('/\D/', '', (string)($config['whatsapp_business_number'] ?? ''));
     return [
         'storeName' => $settings['storeName'], 'supportEmail' => $settings['supportEmail'],
         'supportPhone' => $settings['supportPhone'], 'city' => $settings['city'],
         'gstin' => $settings['gstin'], 'freeShippingOver' => $settings['freeShippingOver'],
         'shippingFlat' => $settings['shippingFlat'], 'razorpayKeyId' => $test ? $key : '',
         'paymentsReady' => $test,
+        'whatsappContactUrl' => preg_match('/^\d{6,20}$/', $whatsappNumber) ? 'https://wa.me/' . $whatsappNumber . '?text=Hi%2C%20I%27d%20like%20to%20enquire%20about%20your%20products.' : '',
         'notifications' => notification_capabilities(),
     ];
 }

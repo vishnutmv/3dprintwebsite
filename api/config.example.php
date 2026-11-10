@@ -19,4 +19,9 @@ return [
     'resend_api_key' => '',
     'notify_from' => '',
     'notify_webhook_url' => '',
+    'whatsapp_business_number' => '',
+    'waapi_instance_id' => '',
+    'waapi_api_token' => '',
+    'waapi_webhook_secret' => '',
+    'storefront_url' => '',
 ];

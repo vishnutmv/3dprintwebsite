@@ -5,7 +5,7 @@
  */
 
 import { Link, NavLink } from "react-router-dom";
-import { ShieldCheck, ShoppingBag } from "lucide-react";
+import { MessageCircle, ShieldCheck, ShoppingBag } from "lucide-react";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -18,6 +18,7 @@ const nav = [
 
 export function SiteHeader() {
   const cartCount = useStore((state) => state.cart.reduce((sum, item) => sum + item.qty, 0));
+  const whatsappContactUrl = useStore((state) => state.settings.whatsappContactUrl);
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-ink-950/70 backdrop-blur-xl">
@@ -45,6 +46,18 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-1.5">
+          {whatsappContactUrl && (
+            <a
+              href={whatsappContactUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-[11px] font-medium text-mint transition hover:bg-white/[0.06] hover:text-white"
+              aria-label="Enquire on WhatsApp"
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Enquire</span>
+            </a>
+          )}
           <Link
             to="/cart"
             className="relative grid h-9 w-9 place-items-center rounded-xl text-white/60 transition hover:bg-white/[0.06] hover:text-white"
