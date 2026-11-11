@@ -90,6 +90,68 @@ function product_values(array $input, bool $partial): array
     return $values;
 }
 
+function collaborator_values(array $input, bool $partial): array
+{
+    $values = [];
+    if (!$partial || array_key_exists('name', $input)) {
+        $name = text_value($input['name'] ?? '', 160);
+        if (mb_strlen($name) < 2) fail(400, 'Collaborator name must contain at least 2 characters.');
+        $values['name'] = $name;
+    }
+    foreach (['contactName' => ['contact_name', 120], 'phone' => ['phone', 24], 'notes' => ['notes', 1000]] as $key => [$column, $max]) {
+        if (!$partial || array_key_exists($key, $input)) $values[$column] = text_value($input[$key] ?? '', $max);
+    }
+    if (!$partial || array_key_exists('email', $input)) {
+        $email = text_value($input['email'] ?? '', 254);
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) fail(400, 'Enter a valid collaborator email address.');
+        $values['email'] = $email ?: null;
+    }
+    if (array_key_exists('active', $input)) $values['is_active'] = !empty($input['active']) ? 1 : 0;
+    if ($partial && !$values) fail(400, 'Nothing to update.');
+    return $values;
+}
+
+function collaborator_offer_values(array $input, bool $partial): array
+{
+    $values = [];
+    if (!$partial || array_key_exists('rewardName', $input)) {
+        $name = text_value($input['rewardName'] ?? '', 160);
+        if (mb_strlen($name) < 2) fail(400, 'Reward name must contain at least 2 characters.');
+        $values['reward_name'] = $name;
+    }
+    if (!$partial || array_key_exists('rewardType', $input)) {
+        $type = text_value($input['rewardType'] ?? '', 30);
+        if (!in_array($type, ['cashback', 'percentage_discount', 'fixed_discount', 'product', 'other'], true)) fail(400, 'Select a valid collaborator reward type.');
+        $values['reward_type'] = $type;
+    }
+    if (!$partial || array_key_exists('rewardValue', $input)) {
+        $value = trim((string)($input['rewardValue'] ?? '0'));
+        if (!preg_match('/^\d{1,8}(?:\.\d{1,2})?$/', $value) || (float)$value > 99999999) fail(400, 'Reward value must be a non-negative number with up to 2 decimals.');
+        if (($values['reward_type'] ?? $input['rewardType'] ?? '') === 'percentage_discount' && (float)$value > 100) {
+            fail(400, 'Percentage discount cannot exceed 100%.');
+        }
+        $values['reward_value'] = number_format((float)$value, 2, '.', '');
+    }
+    if (!$partial || array_key_exists('quantity', $input)) {
+        $quantity = filter_var($input['quantity'] ?? 1, FILTER_VALIDATE_INT);
+        if ($quantity === false || $quantity < 1 || $quantity > 100000) fail(400, 'Reward quantity must be between 1 and 100000.');
+        $values['quantity'] = $quantity;
+    }
+    if (!$partial || array_key_exists('terms', $input)) $values['terms'] = text_value($input['terms'] ?? '', 1000);
+    if ($partial && !$values) fail(400, 'Nothing to update.');
+    return $values;
+}
+
+function collaborator_offer_out(array $row): array
+{
+    return [
+        'id' => $row['id'], 'collaboratorId' => $row['collaborator_id'], 'prizeId' => $row['prize_id'],
+        'rewardName' => $row['reward_name'], 'rewardType' => $row['reward_type'],
+        'rewardValue' => (float)$row['reward_value'], 'quantity' => (int)$row['quantity'],
+        'terms' => $row['terms'], 'createdAt' => $row['created_at'],
+    ];
+}
+
 function save_fields(string $table, string $idColumn, string $id, array $values): void
 {
     if (!$values) return;
@@ -118,7 +180,8 @@ function prize_values(array $input, bool $partial): array
         $values['prize_type'] = $type;
     }
     if (array_key_exists('voucherCode', $input) || array_key_exists('voucher_code', $input)) {
-        $code = strtoupper(text_value($input['voucherCode'] ?? $input['voucher_code'], 40));
+        $rawCode = array_key_exists('voucherCode', $input) ? $input['voucherCode'] : ($input['voucher_code'] ?? '');
+        $code = strtoupper(text_value($rawCode, 40));
         if ($code !== '' && !preg_match('/^[A-Z0-9-]{4,40}$/', $code)) fail(400, 'Voucher code may only contain A–Z, 0–9 and hyphens (4–40 chars).');
         $values['voucher_code'] = $code ?: null;
     }
@@ -128,6 +191,11 @@ function prize_values(array $input, bool $partial): array
         $values['worth'] = $worth;
     }
     foreach (['sponsor' => 160, 'cycle' => 60] as $key => $max) if (array_key_exists($key, $input)) $values[$key] = text_value($input[$key], $max);
+    if (array_key_exists('quantity', $input)) {
+        $quantity = filter_var($input['quantity'], FILTER_VALIDATE_INT);
+        if ($quantity === false || $quantity < 1 || $quantity > 100000) fail(400, 'Reward quantity must be between 1 and 100000.');
+        $values['quantity'] = $quantity;
+    }
     if (array_key_exists('mediaUrls', $input) || array_key_exists('media_urls', $input)) {
         $urls = $input['mediaUrls'] ?? $input['media_urls'];
         if (!is_array($urls) || count($urls) > 12) fail(400, 'Media must be up to 12 valid http(s) URLs.');
@@ -150,6 +218,34 @@ function admin_order(string $number): ?array
     $customer = $details['customer'];
     $details['customer']['customer_name'] = $customer['full_name'] ?? '';
     return mapped_details($details);
+}
+
+function order_status_whatsapp_text(array $details, string $status): string
+{
+    $order = $details['order'];
+    $customer = $details['customer'];
+    $copy = [
+        'confirmed' => [
+            '✅', 'Order confirmed',
+            ($order['payment_status'] ?? '') === 'paid'
+                ? 'Your payment is confirmed and your order is in our queue.'
+                : 'Your order is confirmed. We will update you when payment is verified.',
+        ],
+        'processing' => ['🛠️', 'We are printing your order', 'Your 3D print is now being prepared by our team.'],
+        'packed' => ['📦', 'Packed and ready', 'Your order has been packed and is getting ready to leave our studio.'],
+        'shipped' => ['🚚', 'On the way', 'Your order has been shipped. We will share any tracking details separately.'],
+        'delivered' => ['🎉', 'Delivered', 'Your order is marked delivered. We hope you love your 3D print!'],
+        'cancelled' => ['⚠️', 'Order cancelled', 'Your order has been cancelled. Please contact us if you need help.'],
+        'pending' => ['🕓', 'Order update', 'Your order is pending. We will update you when its status changes.'],
+    ];
+    [$icon, $title, $message] = $copy[$status] ?? ['ℹ️', 'Order update', 'Your order status has changed.'];
+    $name = trim((string)($customer['full_name'] ?? ''));
+    return ($name !== '' ? "Hi {$name},\n\n" : '')
+        . "{$icon} 3D PRINT CO. - {$title}\n"
+        . "Order: {$order['order_number']}\n\n"
+        . "{$message}\n\n"
+        . 'Order total: INR ' . number_format((int)$order['total_amount'] / 100, 2)
+        . "\n\n— 3D Print Co.";
 }
 
 function handle_admin(string $path, array $parts): bool
@@ -192,7 +288,13 @@ function handle_admin(string $path, array $parts): bool
     if (!in_array($method, ['GET', 'HEAD'], true)) guard_admin_write();
 
     if ($path === 'admin/products' && $method === 'GET') {
-        respond(200, ['products' => array_map('product_out', all('SELECT * FROM products ORDER BY created_at DESC'))]);
+        $products = all(
+            'SELECT p.*, '
+            . '(SELECT COALESCE(SUM(i.quantity),0) FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.product_id=p.id AND o.payment_status="paid") AS sold_count, '
+            . '(SELECT COALESCE(SUM(i.quantity),0) FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.product_id=p.id AND o.payment_status="paid" AND o.created_at>=UTC_TIMESTAMP()-INTERVAL 30 DAY) AS recent_sold_count '
+            . 'FROM products p ORDER BY p.created_at DESC'
+        );
+        respond(200, ['products' => array_map('product_out', $products)]);
     }
     if ($path === 'admin/products' && $method === 'POST') {
         $input = body();
@@ -250,6 +352,55 @@ function handle_admin(string $path, array $parts): bool
         }
         respond(200, ['customers' => $result]);
     }
+    if ($path === 'admin/leads' && $method === 'GET') {
+        $leads = all(
+            'SELECT l.id, l.chat_id, l.phone_e164, l.contact_name, l.last_message, l.last_message_at, l.status, l.is_business_enquiry, '
+                . 'l.is_existing_customer, l.enquiry_interest, l.details_requested_at, l.created_at, l.updated_at, '
+                . 'c.customer_code AS linked_customer_code, c.full_name AS linked_customer_name, c.email AS linked_customer_email, '
+                . 'c.phone AS linked_customer_phone, c.delivery_address AS linked_customer_address, c.city AS linked_customer_city, '
+                . 'c.state AS linked_customer_state, c.postal_code AS linked_customer_postal_code, c.marketing_opt_in AS linked_marketing_opt_in '
+                . 'FROM whatsapp_leads l LEFT JOIN customers c ON c.id=l.customer_id '
+                . 'ORDER BY FIELD(l.status,"new","active","closed"), l.updated_at DESC LIMIT 500',
+        );
+        $count = one('SELECT COUNT(*) AS new_count FROM whatsapp_leads WHERE status="new" AND is_business_enquiry=1');
+        $newCount = (int)($count['new_count'] ?? 0);
+        respond(200, [
+            'leads' => array_map(static fn(array $lead): array => [
+                'id' => $lead['id'],
+                'chatId' => $lead['chat_id'],
+                'phone' => $lead['phone_e164'] ? '+' . $lead['phone_e164'] : $lead['chat_id'],
+                'name' => $lead['contact_name'],
+                'lastMessage' => $lead['last_message'],
+                'lastMessageAt' => $lead['last_message_at'],
+                'status' => $lead['status'],
+                'isBusinessEnquiry' => (bool)$lead['is_business_enquiry'],
+                'isExistingCustomer' => (bool)$lead['is_existing_customer'],
+                'enquiryInterest' => $lead['enquiry_interest'] ?? '',
+                'detailsRequestedAt' => $lead['details_requested_at'],
+                'createdAt' => $lead['created_at'],
+                'updatedAt' => $lead['updated_at'],
+                'chatUrl' => $lead['phone_e164'] ? 'https://wa.me/' . $lead['phone_e164'] : '',
+                'customer' => $lead['linked_customer_code'] ? [
+                    'customerCode' => $lead['linked_customer_code'],
+                    'name' => $lead['linked_customer_name'],
+                    'email' => $lead['linked_customer_email'] ?? '',
+                    'phone' => $lead['linked_customer_phone'],
+                    'address' => $lead['linked_customer_address'] ?? '',
+                    'city' => $lead['linked_customer_city'] ?? '',
+                    'state' => $lead['linked_customer_state'] ?? '',
+                    'postalCode' => $lead['linked_customer_postal_code'] ?? '',
+                    'marketingOptIn' => (bool)$lead['linked_marketing_opt_in'],
+                ] : null,
+            ], $leads),
+            'newCount' => $newCount,
+        ]);
+    }
+    if ($path === 'admin/leads/count' && $method === 'GET') {
+        $count = one('SELECT COUNT(*) AS new_count FROM whatsapp_leads WHERE status="new" AND is_business_enquiry=1');
+        respond(200, ['newCount' => (int)($count['new_count'] ?? 0)]);
+    }
+    if ($path === 'admin/whatsapp/messages' && $method === 'GET') {
+        $chatId = text_value($_GET['chatId'] ?? '', 120);
         if (!preg_match('/^(?:\d{6,20}@c\.us|[A-Za-z0-9_-]{1,100}@lid)$/', $chatId)) fail(400, 'A valid WhatsApp chat is required.');
         $lead = one('SELECT id FROM whatsapp_leads WHERE chat_id=?', [$chatId]);
         $messages = $lead
@@ -283,7 +434,8 @@ function handle_admin(string $path, array $parts): bool
         $result = run('UPDATE whatsapp_leads SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?', [$status, $id]);
         if ($result->rowCount() === 0 && !one('SELECT id FROM whatsapp_leads WHERE id=?', [$id])) fail(404, 'Lead not found.');
         $lead = one(
-            'SELECT l.id, l.chat_id, l.phone_e164, l.contact_name, l.last_message, l.last_message_at, l.status, l.created_at, l.updated_at, '
+            'SELECT l.id, l.chat_id, l.phone_e164, l.contact_name, l.last_message, l.last_message_at, l.status, l.is_business_enquiry, '
+                . 'l.is_existing_customer, l.enquiry_interest, l.details_requested_at, l.created_at, l.updated_at, '
                 . 'c.customer_code AS linked_customer_code, c.full_name AS linked_customer_name, c.email AS linked_customer_email, '
                 . 'c.phone AS linked_customer_phone, c.delivery_address AS linked_customer_address, c.city AS linked_customer_city, '
                 . 'c.state AS linked_customer_state, c.postal_code AS linked_customer_postal_code, c.marketing_opt_in AS linked_marketing_opt_in '
@@ -294,6 +446,10 @@ function handle_admin(string $path, array $parts): bool
             'id' => $lead['id'], 'chatId' => $lead['chat_id'], 'phone' => $lead['phone_e164'] ? '+' . $lead['phone_e164'] : $lead['chat_id'], 'name' => $lead['contact_name'],
             'lastMessage' => $lead['last_message'], 'lastMessageAt' => $lead['last_message_at'],
             'status' => $lead['status'], 'createdAt' => $lead['created_at'],
+            'isBusinessEnquiry' => (bool)$lead['is_business_enquiry'],
+            'isExistingCustomer' => (bool)$lead['is_existing_customer'],
+            'enquiryInterest' => $lead['enquiry_interest'] ?? '',
+            'detailsRequestedAt' => $lead['details_requested_at'],
             'updatedAt' => $lead['updated_at'], 'chatUrl' => $lead['phone_e164'] ? 'https://wa.me/' . $lead['phone_e164'] : '',
             'customer' => $lead['linked_customer_code'] ? [
                 'customerCode' => $lead['linked_customer_code'], 'name' => $lead['linked_customer_name'],
@@ -342,20 +498,202 @@ function handle_admin(string $path, array $parts): bool
         $input = body();
         $status = text_value($input['orderStatus'] ?? $input['status'] ?? '', 20);
         if (!in_array($status, ['pending','confirmed','processing','packed','shipped','delivered','cancelled'], true)) fail(400, 'Unknown order status.');
-        run('UPDATE orders SET order_status=? WHERE order_number=?', [$status, rawurldecode($match[1])]);
-        $details = order_details(rawurldecode($match[1]));
+        $number = rawurldecode($match[1]);
+        $details = order_details($number);
         if (!$details) fail(404, 'Order not found.');
-        if (!empty($details['customer']['email'])) notify_event(
-            $details['customer']['email'], 'order.status',
-            'Order ' . $details['order']['order_number'] . ' is now ' . $status,
-            "Your order status changed to: $status.\n\nOrder: {$details['order']['order_number']}\n— 3D Print Co.",
-            ['orderNumber' => $details['order']['order_number'], 'status' => $status]
+        $changed = run(
+            'UPDATE orders SET order_status=? WHERE order_number=? AND order_status<>?',
+            [$status, $number, $status],
+        )->rowCount() > 0;
+        $whatsappStatus = 'not_configured';
+        if ($changed) {
+            $details = order_details($number);
+            if (!empty($details['customer']['email'])) notify_event(
+                $details['customer']['email'], 'order.status',
+                'Order ' . $details['order']['order_number'] . ' is now ' . $status,
+                order_status_whatsapp_text($details, $status),
+                ['orderNumber' => $details['order']['order_number'], 'status' => $status]
+            );
+            if (!empty($details['customer']['phone'])) {
+                global $config;
+                $whatsappStatus = !empty($config['waapi_api_token']) && !empty($config['waapi_instance_id'])
+                    ? (send_whatsapp_notification(
+                    (string)$details['customer']['phone'],
+                    (string)($details['customer']['full_name'] ?? ''),
+                    order_status_whatsapp_text($details, $status),
+                    ) ? 'sent' : 'failed')
+                    : 'not_configured';
+            }
+        }
+        respond(200, ['order' => mapped_details($details), 'notifications' => [
+            'whatsapp' => $changed ? $whatsappStatus : 'unchanged',
+        ]]);
+    }
+
+    if ($path === 'admin/campaigns/audience' && $method === 'GET') {
+        $count = one('SELECT COUNT(*) AS count FROM customers WHERE marketing_opt_in=1 AND phone<>""');
+        $audience = all('SELECT id,customer_code,full_name,email,phone FROM customers WHERE marketing_opt_in=1 AND phone<>"" ORDER BY updated_at DESC');
+        respond(200, ['count' => (int)($count['count'] ?? 0), 'customers' => array_map(static fn($customer) => [
+            'customerCode' => $customer['customer_code'], 'name' => $customer['full_name'],
+            'email' => $customer['email'] ?? '', 'phone' => $customer['phone'],
+        ], $audience)]);
+    }
+    if ($path === 'admin/campaigns' && $method === 'GET') {
+        $campaigns = all('SELECT * FROM whatsapp_campaigns ORDER BY created_at DESC LIMIT 100');
+        respond(200, ['campaigns' => array_map(static fn($campaign) => [
+            'id' => $campaign['id'], 'message' => $campaign['message'],
+            'recipientCount' => (int)$campaign['recipient_count'],
+            'sentCount' => (int)$campaign['sent_count'], 'failedCount' => (int)$campaign['failed_count'],
+            'skippedCount' => (int)$campaign['skipped_count'],
+            'createdAt' => $campaign['created_at'],
+        ], $campaigns)]);
+    }
+    if ($path === 'admin/campaigns' && $method === 'POST') {
+        $message = text_value(body()['message'] ?? '', 1000);
+        if ($message === '') fail(400, 'Campaign message is required.');
+        if (empty($config['waapi_api_token']) || empty($config['waapi_instance_id'])) fail(503, 'WaAPI is not configured for sending campaigns.');
+        if (preg_match('/\b(?:stop|unsubscribe|opt[\s-]?out)\b/i', $message) !== 1) {
+            fail(400, 'Add a clear opt-out instruction such as “Reply STOP” before creating a campaign.');
+        }
+        $audience = all('SELECT id FROM customers WHERE marketing_opt_in=1 AND phone<>"" ORDER BY updated_at DESC');
+        if (!$audience) fail(409, 'There are no customers with WhatsApp marketing consent.');
+        $campaignId = new_id();
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            run('INSERT INTO whatsapp_campaigns (id,message,created_by,recipient_count) VALUES (?,?,?,?)', [
+                $campaignId, $message, $session['email'], count($audience),
+            ]);
+            foreach ($audience as $customer) {
+                run('INSERT INTO whatsapp_campaign_recipients (id,campaign_id,customer_id,status) VALUES (?,?,?,"pending")', [
+                    new_id(), $campaignId, $customer['id'],
+                ]);
+            }
+            $pdo->commit();
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
+        }
+        respond(201, ['campaign' => [
+            'id' => $campaignId, 'message' => $message,
+            'recipientCount' => count($audience), 'sentCount' => 0, 'failedCount' => 0, 'skippedCount' => 0,
+            'createdAt' => date(DATE_ATOM),
+        ]]);
+    }
+    if (preg_match('#^admin/campaigns/([0-9a-f-]{36})/send$#i', $path, $match) && $method === 'POST') {
+        $campaignId = $match[1];
+        $campaign = one('SELECT * FROM whatsapp_campaigns WHERE id=?', [$campaignId]);
+        if (!$campaign) fail(404, 'Campaign not found.');
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            run(
+                'UPDATE whatsapp_campaign_recipients r JOIN customers c ON c.id=r.customer_id '
+                . 'SET r.status="skipped",r.error_message="Marketing consent is no longer active." '
+                . 'WHERE r.campaign_id=? AND r.status="pending" AND c.marketing_opt_in<>1',
+                [$campaignId],
+            );
+            run(
+                'UPDATE whatsapp_campaign_recipients SET status="pending" '
+                . 'WHERE campaign_id=? AND status="sending" AND updated_at<UTC_TIMESTAMP()-INTERVAL 15 MINUTE',
+                [$campaignId],
+            );
+            $recipients = all(
+                'SELECT r.id AS recipient_id,c.id,c.full_name,c.phone FROM whatsapp_campaign_recipients r '
+                . 'JOIN customers c ON c.id=r.customer_id WHERE r.campaign_id=? AND r.status="pending" '
+                . 'AND c.marketing_opt_in=1 ORDER BY r.created_at ASC LIMIT 3 FOR UPDATE',
+                [$campaignId],
+            );
+            foreach ($recipients as $recipient) {
+                run('UPDATE whatsapp_campaign_recipients SET status="sending" WHERE id=? AND status="pending"', [$recipient['recipient_id']]);
+            }
+            $pdo->commit();
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
+        }
+        foreach ($recipients as $recipient) {
+            $consented = one('SELECT marketing_opt_in FROM customers WHERE id=?', [$recipient['id']]);
+            $sent = $consented && (bool)$consented['marketing_opt_in']
+                && send_whatsapp_notification((string)$recipient['phone'], (string)$recipient['full_name'], (string)$campaign['message']);
+            run(
+                'UPDATE whatsapp_campaign_recipients SET status=?,error_message=? WHERE id=? AND status="sending"',
+                [$consented && (bool)$consented['marketing_opt_in'] ? ($sent ? 'sent' : 'failed') : 'skipped',
+                    $sent ? null : ($consented && (bool)$consented['marketing_opt_in'] ? 'WaAPI did not accept the message.' : 'Marketing consent is no longer active.'),
+                    $recipient['recipient_id']],
+            );
+        }
+        $summary = one(
+            'SELECT SUM(status IN ("pending","sending")) AS remaining,SUM(status="sent") AS sent,'
+            . 'SUM(status="failed") AS failed,SUM(status="skipped") AS skipped '
+            . 'FROM whatsapp_campaign_recipients WHERE campaign_id=?',
+            [$campaignId],
         );
-        respond(200, ['order' => mapped_details($details)]);
+        run('UPDATE whatsapp_campaigns SET sent_count=?,failed_count=?,skipped_count=? WHERE id=?', [
+            (int)($summary['sent'] ?? 0), (int)($summary['failed'] ?? 0), (int)($summary['skipped'] ?? 0), $campaignId,
+        ]);
+        respond(200, [
+            'campaignId' => $campaignId, 'processed' => count($recipients),
+            'sentCount' => (int)($summary['sent'] ?? 0), 'failedCount' => (int)($summary['failed'] ?? 0),
+            'skippedCount' => (int)($summary['skipped'] ?? 0),
+            'remaining' => (int)($summary['remaining'] ?? 0),
+        ]);
+    }
+
+    if ($path === 'admin/insights' && $method === 'GET') {
+        $summary = one(
+            'SELECT '
+            . '(SELECT COUNT(*) FROM whatsapp_leads WHERE is_business_enquiry=1 AND is_existing_customer=0) AS enquiries, '
+            . '(SELECT COUNT(*) FROM whatsapp_leads WHERE is_business_enquiry=1 AND is_existing_customer=0 AND converted_at IS NOT NULL) AS conversions, '
+            . '(SELECT COUNT(*) FROM orders WHERE payment_status="paid") AS paid_orders, '
+            . '(SELECT COALESCE(SUM(total_amount),0) FROM orders WHERE payment_status="paid") AS revenue'
+        );
+        $daily = all(
+            'SELECT DATE(created_at) AS day,COUNT(*) AS orders FROM orders WHERE payment_status="paid" '
+            . 'AND created_at>=UTC_DATE()-INTERVAL 29 DAY GROUP BY DATE(created_at) ORDER BY day'
+        );
+        $heat = all(
+            'SELECT DAYOFWEEK(business_enquiry_at)-1 AS weekday,HOUR(business_enquiry_at) AS hour,COUNT(*) AS count '
+            . 'FROM whatsapp_leads WHERE is_business_enquiry=1 AND is_existing_customer=0 AND business_enquiry_at>=UTC_TIMESTAMP()-INTERVAL 90 DAY '
+            . 'GROUP BY DAYOFWEEK(business_enquiry_at),HOUR(business_enquiry_at)'
+        );
+        $products = all(
+            'SELECT p.id,p.name,COALESCE(SUM(IF(o.payment_status="paid",i.quantity,0)),0) AS units,'
+            . 'COALESCE(SUM(IF(o.payment_status="paid",i.total_price,0)),0) AS revenue,'
+            . 'COALESCE(SUM(IF(o.payment_status="paid" AND o.created_at>=UTC_TIMESTAMP()-INTERVAL 30 DAY,i.quantity,0)),0) AS recent_units '
+            . 'FROM products p LEFT JOIN order_items i ON i.product_id=p.id LEFT JOIN orders o ON o.id=i.order_id AND o.payment_status="paid" '
+            . 'GROUP BY p.id,p.name ORDER BY units DESC,revenue DESC LIMIT 20'
+        );
+        $rank = 0;
+        $productRows = [];
+        foreach ($products as $product) {
+            if ((int)$product['units'] > 0) $rank++;
+            $tag = (int)$product['recent_units'] >= 3 ? 'Hot' : (((int)$product['units'] > 0 && $rank === 1) ? 'Best seller' : null);
+            $productRows[] = [
+                'id' => $product['id'], 'name' => $product['name'],
+                'units' => (int)$product['units'], 'recentUnits' => (int)$product['recent_units'],
+                'revenue' => (int)$product['revenue'], 'trendTag' => $tag,
+            ];
+        }
+        respond(200, [
+            'summary' => [
+                'enquiries' => (int)$summary['enquiries'], 'conversions' => (int)$summary['conversions'],
+                'conversionRate' => (int)$summary['enquiries'] > 0 ? round((int)$summary['conversions'] * 100 / (int)$summary['enquiries'], 1) : 0,
+                'paidOrders' => (int)$summary['paid_orders'], 'revenue' => (int)$summary['revenue'],
+            ],
+            'dailyPaidOrders' => array_map(static fn($row) => ['day' => $row['day'], 'count' => (int)$row['orders']], $daily),
+            'enquiryHeatmap' => array_map(static fn($row) => [
+                'weekday' => (int)$row['weekday'], 'hour' => (int)$row['hour'], 'count' => (int)$row['count'],
+            ], $heat),
+            'products' => $productRows,
+        ]);
     }
 
     if ($path === 'admin/prizes' && $method === 'GET') {
-        $prizes = all('SELECT * FROM prizes ORDER BY created_at DESC');
+        $prizes = all(
+            'SELECT p.*, GREATEST(p.quantity-(SELECT COUNT(*) FROM customer_prizes cp WHERE cp.prize_id=p.id AND cp.released_at IS NULL),0) AS available_quantity '
+            . 'FROM prizes p ORDER BY p.created_at DESC'
+        );
         $assignments = all('SELECT cp.*,c.customer_code,c.full_name,c.email,p.title FROM customer_prizes cp JOIN customers c ON c.id=cp.customer_id JOIN prizes p ON p.id=cp.prize_id ORDER BY cp.assigned_at DESC');
         $active = [];
         foreach ($assignments as $assignment) if ($assignment['released_at'] === null && !isset($active[$assignment['prize_id']])) $active[$assignment['prize_id']] = $assignment;
@@ -383,7 +721,7 @@ function handle_admin(string $path, array $parts): bool
         $row = array_merge([
             'id' => new_id(), 'title' => '', 'description' => '', 'prize_type' => 'regular',
             'voucher_code' => null, 'worth' => 0, 'sponsor' => '', 'cycle' => '',
-            'status' => 'open', 'media_urls' => '[]', 'is_active' => 1,
+            'status' => 'open', 'quantity' => 1, 'media_urls' => '[]', 'is_active' => 1,
         ], $v);
         $columns = array_keys($row);
         run('INSERT INTO prizes (' . implode(',', array_map(static fn($x) => "`$x`", $columns)) . ') VALUES (' . implode(',', array_fill(0, count($columns), '?')) . ')', array_values($row));
@@ -405,6 +743,14 @@ function handle_admin(string $path, array $parts): bool
                 run('UPDATE prizes SET status="open" WHERE id=?', [$id]);
                 unset($v['status']);
             }
+            if (isset($v['quantity'])) {
+                $assigned = one('SELECT COUNT(*) AS count FROM customer_prizes WHERE prize_id=? AND released_at IS NULL', [$id]);
+                $assignedCount = (int)($assigned['count'] ?? 0);
+                if ($assignedCount > $v['quantity']) fail(409, 'Quantity cannot be lower than the number of active gift cards already assigned.');
+                if (!isset($v['status']) && $prize['status'] !== 'claimed') {
+                    $v['status'] = $assignedCount >= $v['quantity'] ? 'awarded' : 'open';
+                }
+            }
             save_fields('prizes', 'id', $id, $v);
             respond(200, ['prize' => prize_out(one('SELECT * FROM prizes WHERE id=?', [$id]))]);
         }
@@ -420,37 +766,200 @@ function handle_admin(string $path, array $parts): bool
         try {
             $prize = one('SELECT * FROM prizes WHERE id=? FOR UPDATE', [$prizeId]);
             if (!$prize) fail(404, 'Prize not found.');
-            if (!(bool)$prize['is_active'] || $prize['status'] !== 'open') fail(409, 'This prize has already been awarded. Release it first.');
+            if (!(bool)$prize['is_active'] || $prize['status'] !== 'open') fail(409, 'This reward is not currently available.');
+            $assignedCount = one('SELECT COUNT(*) AS count FROM customer_prizes WHERE prize_id=? AND released_at IS NULL', [$prizeId]);
+            if ((int)($assignedCount['count'] ?? 0) >= (int)$prize['quantity']) {
+                run('UPDATE prizes SET status="awarded" WHERE id=?', [$prizeId]);
+                fail(409, 'No units of this reward remain.');
+            }
             $column = preg_match('/^[0-9a-f-]{36}$/i', $customerRef) ? 'id' : 'customer_code';
             $customer = one("SELECT * FROM customers WHERE `$column`=?", [$customerRef]);
             if (!$customer) fail(404, 'Customer not found. Check the customer code.');
             if (!one('SELECT id FROM orders WHERE customer_id=? AND payment_status="paid" LIMIT 1', [$customer['id']])) fail(409, 'This customer has no paid orders and is not eligible for assignment.');
+            if (one('SELECT id FROM customer_prizes WHERE prize_id=? AND customer_id=? AND released_at IS NULL LIMIT 1', [$prizeId, $customer['id']])) {
+                fail(409, 'This customer already has an active assignment for this reward.');
+            }
             $notes = text_value($input['notes'] ?? '', 500);
             $assignmentId = new_id();
-            run('INSERT INTO customer_prizes (id,customer_id,prize_id,active_prize_id,assigned_by,notification_status,notes) VALUES (?,?,?,?,?,?,?)', [
-                $assignmentId, $customer['id'], $prizeId, $prizeId, $session['email'], 'not_configured', $notes ?: null,
+            $revealToken = bin2hex(random_bytes(32));
+            run('INSERT INTO customer_prizes (id,customer_id,prize_id,active_prize_id,assigned_by,notification_status,notes,reveal_token) VALUES (?,?,?,?,?,?,?,?)', [
+                $assignmentId, $customer['id'], $prizeId, $prizeId, $session['email'], 'not_configured', $notes ?: null, $revealToken,
             ]);
-            run('UPDATE prizes SET status="awarded" WHERE id=?', [$prizeId]);
+            run(
+                'UPDATE prizes SET status=IF((SELECT COUNT(*) FROM customer_prizes WHERE prize_id=? AND released_at IS NULL)>=quantity,"awarded","open") WHERE id=?',
+                [$prizeId, $prizeId],
+            );
             $pdo->commit();
-            $notificationStatus = !empty($customer['email'])
-                ? notify_event(
-                    $customer['email'], 'prize.assigned', 'You won: ' . $prize['title'],
-                    "Congratulations — you have been awarded: {$prize['title']}.\n\nCustomer ID: {$customer['customer_code']}\n"
-                    . (!empty($prize['voucher_code']) ? "Voucher code: {$prize['voucher_code']}\n" : '')
-                    . "\nReply to this message within 7 days to claim.\n— 3D Print Co.",
-                    ['prizeTitle' => $prize['title'], 'phone' => $customer['phone']]
-                )
-                : 'not_configured';
+            global $config;
+            $storefront = rtrim((string)($config['storefront_url'] ?? ''), '/');
+            $revealUrl = short_url($storefront) && strtolower((string)parse_url($storefront, PHP_URL_SCHEME)) === 'https'
+                ? $storefront . '/reward/' . $revealToken
+                : '';
+            $message = "🎉 Congratulations, {$customer['full_name']}!\n"
+                . "3D Print Co. has a surprise reward for you.\n\n"
+                . "Scratch to reveal your reward: " . ($revealUrl ?: 'Please contact our support team.') . "\n\n"
+                . 'Your reward is hidden until you reveal it. — 3D Print Co.';
+            $deliveryStatuses = [];
+            if ($revealUrl !== '' && !empty($customer['email'])) {
+                $deliveryStatuses[] = notify_event(
+                    $customer['email'], 'prize.assigned', 'A surprise reward is waiting for you',
+                    $message, ['phone' => $customer['phone']]
+                );
+            }
+            if ($revealUrl !== '' && !empty($customer['phone'])) {
+                $deliveryStatuses[] = !empty($config['waapi_api_token']) && !empty($config['waapi_instance_id'])
+                    ? (send_whatsapp_notification((string)$customer['phone'], (string)$customer['full_name'], $message) ? 'sent' : 'failed')
+                    : 'not_configured';
+            }
+            $notificationStatus = in_array('sent', $deliveryStatuses, true)
+                ? 'sent'
+                : (in_array('failed', $deliveryStatuses, true) ? 'failed' : 'not_configured');
             run('UPDATE customer_prizes SET notification_status=? WHERE id=?', [$notificationStatus, $assignmentId]);
             respond(201, ['assignment' => [
                 'id' => $assignmentId, 'prizeId' => $prizeId, 'prizeTitle' => $prize['title'],
                 'customerId' => $customer['customer_code'], 'customerName' => $customer['full_name'],
                 'customerEmail' => $customer['email'] ?? '', 'assignedBy' => $session['email'],
-                'notificationStatus' => $notificationStatus, 'assignedAt' => date(DATE_ATOM), 'notes' => $notes,
+                'notificationStatus' => $notificationStatus, 'assignedAt' => date(DATE_ATOM),
+                'revealUrl' => $revealUrl, 'notes' => $notes,
             ]]);
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;
+        }
+    }
+
+    if ($path === 'admin/collaborators' && $method === 'GET') {
+        $collaborators = all('SELECT * FROM collaborators ORDER BY is_active DESC,name ASC');
+        $offers = all('SELECT * FROM collaborator_offers ORDER BY created_at DESC');
+        $offersByCollaborator = [];
+        foreach ($offers as $offer) $offersByCollaborator[$offer['collaborator_id']][] = collaborator_offer_out($offer);
+        respond(200, ['collaborators' => array_map(static fn(array $row): array => [
+            'id' => $row['id'], 'name' => $row['name'], 'contactName' => $row['contact_name'],
+            'email' => $row['email'] ?? '', 'phone' => $row['phone'], 'notes' => $row['notes'],
+            'active' => (bool)$row['is_active'], 'createdAt' => $row['created_at'],
+            'offers' => $offersByCollaborator[$row['id']] ?? [],
+        ], $collaborators)]);
+    }
+    if ($path === 'admin/collaborators' && $method === 'POST') {
+        $values = collaborator_values(body(), false);
+        $row = array_merge(['id' => new_id(), 'is_active' => 1], $values);
+        $columns = array_keys($row);
+        run(
+            'INSERT INTO collaborators (' . implode(',', array_map(static fn(string $column): string => "`$column`", $columns)) . ') VALUES (' . implode(',', array_fill(0, count($columns), '?')) . ')',
+            array_values($row),
+        );
+        respond(201, ['collaborator' => ['id' => $row['id'], 'name' => $row['name'], 'contactName' => $row['contact_name'], 'email' => $row['email'] ?? '', 'phone' => $row['phone'], 'notes' => $row['notes'], 'active' => true, 'offers' => []]]);
+    }
+    if (preg_match('#^admin/collaborators/([0-9a-f-]{36})$#i', $path, $match) && $method === 'PATCH') {
+        $id = $match[1];
+        $values = collaborator_values(body(), true);
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            $result = run(
+                'UPDATE collaborators SET ' . implode(',', array_map(static fn(string $column): string => "`$column`=?", array_keys($values))) . ' WHERE id=?',
+                [...array_values($values), $id],
+            );
+            $row = one('SELECT * FROM collaborators WHERE id=?', [$id]);
+            if (!$row) {
+                $pdo->rollBack();
+                fail(404, 'Collaborator not found.');
+            }
+            if (array_key_exists('name', $values) || array_key_exists('is_active', $values)) {
+                $offers = all('SELECT prize_id FROM collaborator_offers WHERE collaborator_id=?', [$id]);
+                foreach ($offers as $offer) {
+                    $claimed = one('SELECT COUNT(*) AS count FROM customer_prizes WHERE prize_id=? AND released_at IS NULL', [$offer['prize_id']]);
+                    run(
+                        'UPDATE prizes SET sponsor=?,is_active=?,status=IF(?=1 AND ?<quantity,"open",status) WHERE id=?',
+                        [$row['name'], (int)$row['is_active'], (int)$row['is_active'], (int)($claimed['count'] ?? 0), $offer['prize_id']],
+                    );
+                }
+            }
+            $pdo->commit();
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
+        }
+        $row = one('SELECT * FROM collaborators WHERE id=?', [$id]);
+        respond(200, ['collaborator' => [
+            'id' => $row['id'], 'name' => $row['name'], 'contactName' => $row['contact_name'],
+            'email' => $row['email'] ?? '', 'phone' => $row['phone'], 'notes' => $row['notes'],
+            'active' => (bool)$row['is_active'],
+        ]]);
+    }
+    if (preg_match('#^admin/collaborators/([0-9a-f-]{36})/offers$#i', $path, $match) && $method === 'POST') {
+        $collaboratorId = $match[1];
+        $collaborator = one('SELECT * FROM collaborators WHERE id=?', [$collaboratorId]);
+        if (!$collaborator) fail(404, 'Collaborator not found.');
+        if (!(bool)$collaborator['is_active']) fail(409, 'Activate this collaborator before adding an offer.');
+        $values = collaborator_offer_values(body(), false);
+        if ($values['reward_type'] === 'percentage_discount' && (float)$values['reward_value'] > 100) fail(400, 'Percentage discount cannot exceed 100%.');
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            $offerId = new_id();
+            $prizeId = new_id();
+            $typeLabel = [
+                'cashback' => 'Cashback', 'percentage_discount' => 'Discount',
+                'fixed_discount' => 'Discount', 'product' => 'Product reward', 'other' => 'Reward',
+            ][$values['reward_type']];
+            $valueText = $values['reward_type'] === 'percentage_discount'
+                ? rtrim(rtrim(number_format((float)$values['reward_value'], 2, '.', ''), '0'), '.') . '%'
+                : (in_array($values['reward_type'], ['cashback', 'fixed_discount'], true) ? 'INR ' . $values['reward_value'] : '');
+            $description = trim($valueText . ($values['terms'] !== '' ? ($valueText !== '' ? ' · ' : '') . $values['terms'] : ''));
+            $worth = in_array($values['reward_type'], ['cashback', 'fixed_discount'], true)
+                ? (int)round((float)$values['reward_value'] * 100)
+                : 0;
+            run(
+                'INSERT INTO prizes (id,title,description,prize_type,voucher_code,worth,sponsor,cycle,status,quantity,media_urls,is_active) '
+                . 'VALUES (?,?,?,?,NULL,?,?,?,"open",?,"[]",1)',
+                [$prizeId, $values['reward_name'], $description, in_array($values['reward_type'], ['product', 'other'], true) ? 'regular' : 'voucher', $worth, $collaborator['name'], 'Collaborator offer', $values['quantity']],
+            );
+            run(
+                'INSERT INTO collaborator_offers (id,collaborator_id,prize_id,reward_name,reward_type,reward_value,quantity,terms) VALUES (?,?,?,?,?,?,?,?)',
+                [$offerId, $collaboratorId, $prizeId, $values['reward_name'], $values['reward_type'], $values['reward_value'], $values['quantity'], $values['terms']],
+            );
+            $pdo->commit();
+            respond(201, ['offer' => [
+                'id' => $offerId, 'collaboratorId' => $collaboratorId, 'prizeId' => $prizeId,
+                'rewardName' => $values['reward_name'], 'rewardType' => $values['reward_type'],
+                'rewardValue' => (float)$values['reward_value'], 'quantity' => $values['quantity'],
+                'terms' => $values['terms'],
+            ]]);
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
+        }
+    }
+    if (preg_match('#^admin/collaborator-offers/([0-9a-f-]{36})$#i', $path, $match) && $method === 'PATCH') {
+        $id = $match[1];
+        $offer = one('SELECT * FROM collaborator_offers WHERE id=?', [$id]);
+        if (!$offer) fail(404, 'Collaborator offer not found.');
+        $changes = collaborator_offer_values(body(), true);
+        $next = array_merge($offer, $changes);
+        if ($next['reward_type'] === 'percentage_discount' && (float)$next['reward_value'] > 100) fail(400, 'Percentage discount cannot exceed 100%.');
+        $assignedCount = one('SELECT COUNT(*) AS count FROM customer_prizes WHERE prize_id=? AND released_at IS NULL', [$offer['prize_id']]);
+        if ((int)($assignedCount['count'] ?? 0) > (int)$next['quantity']) fail(409, 'Quantity cannot be lower than the number of active gift cards already assigned.');
+        $collaborator = one('SELECT name FROM collaborators WHERE id=?', [$offer['collaborator_id']]);
+        $label = ['cashback' => 'Cashback', 'percentage_discount' => 'Discount', 'fixed_discount' => 'Discount', 'product' => 'Product reward', 'other' => 'Reward'][$next['reward_type']];
+        $valueText = $next['reward_type'] === 'percentage_discount'
+            ? rtrim(rtrim(number_format((float)$next['reward_value'], 2, '.', ''), '0'), '.') . '%'
+            : (in_array($next['reward_type'], ['cashback', 'fixed_discount'], true) ? 'INR ' . number_format((float)$next['reward_value'], 2) : '');
+        $description = trim($valueText . ($next['terms'] !== '' ? ($valueText !== '' ? ' · ' : '') . $next['terms'] : ''));
+        $worth = in_array($next['reward_type'], ['cashback', 'fixed_discount'], true) ? (int)round((float)$next['reward_value'] * 100) : 0;
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            save_fields('collaborator_offers', 'id', $id, $changes);
+            run(
+                'UPDATE prizes SET title=?,description=?,prize_type=?,worth=?,sponsor=?,quantity=?,is_active=1,status=IF(?<quantity,"open","awarded") WHERE id=?',
+                [$next['reward_name'], $description, in_array($next['reward_type'], ['product', 'other'], true) ? 'regular' : 'voucher', $worth, $collaborator['name'] ?? '', $next['quantity'], (int)($assignedCount['count'] ?? 0), $offer['prize_id']],
+            );
+            $pdo->commit();
+            respond(200, ['offer' => collaborator_offer_out(array_merge($offer, $next))]);
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
         }
     }
 

@@ -3,6 +3,8 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Boxes,
   BarChart3,
+  Bell,
+  BellOff,
   Handshake,
   Gauge,
   Gift,
@@ -128,6 +130,10 @@ export function AdminLayout() {
   const toast = useToast((state) => state.push);
   const location = useLocation();
   const [newLeadCount, setNewLeadCount] = useState(0);
+  const [newLeadCountError, setNewLeadCountError] = useState("");
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
+    () => typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+  );
 
   useEffect(() => {
     if (authenticated) void fetchSettings();
@@ -146,13 +152,34 @@ export function AdminLayout() {
         const count = await getNewLeadCount();
         if (active) {
           setNewLeadCount(count);
+          setNewLeadCountError("");
           if (previousCount !== null && count > previousCount) {
-            toast(`${count - previousCount} new WhatsApp ${count - previousCount === 1 ? "enquiry" : "enquiries"} need attention.`, "warn");
+            const addedCount = count - previousCount;
+            const message = `${addedCount} new WhatsApp ${addedCount === 1 ? "enquiry" : "enquiries"} need attention.`;
+            toast(message, "warn");
+            if (document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
+              try {
+                const notification = new Notification("New WhatsApp enquiry", {
+                  body: message,
+                  tag: "new-whatsapp-enquiry",
+                });
+                notification.onclick = () => {
+                  window.focus();
+                  window.location.assign("/admin/leads");
+                  notification.close();
+                };
+              } catch (caught) {
+                console.error("Could not display a desktop WhatsApp enquiry notification:", caught);
+              }
+            }
           }
           previousCount = count;
         }
       } catch (caught) {
-        if (active) console.error("Could not refresh WhatsApp enquiry count:", caught);
+        if (active) {
+          setNewLeadCountError(caught instanceof Error ? caught.message : "Could not check for new enquiries.");
+          console.error("Could not refresh WhatsApp enquiry count:", caught);
+        }
       }
     };
     void refreshCount();
@@ -161,7 +188,25 @@ export function AdminLayout() {
       active = false;
       window.clearInterval(interval);
     };
-  }, [authenticated, location.pathname, toast]);
+  }, [authenticated, toast]);
+
+  const enableDesktopNotifications = async () => {
+    if (typeof Notification === "undefined") {
+      setNotificationPermission("unsupported");
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === "granted") {
+        toast("Desktop notifications enabled for new WhatsApp enquiries.");
+      } else {
+        toast("Desktop notifications were not enabled. You can still see alerts in the admin panel.", "warn");
+      }
+    } catch (caught) {
+      toast(caught instanceof Error ? caught.message : "Could not enable desktop notifications.", "error");
+    }
+  };
 
   useEffect(() => {
     const originalTitle = document.title;
@@ -249,6 +294,39 @@ export function AdminLayout() {
       </aside>
 
       <div className="min-w-0 flex-1">
+        {!demoMode && (
+          <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[11.5px] text-white/55">
+                New WhatsApp enquiries appear in the inbox and trigger an in-panel alert.
+              </p>
+              {notificationPermission === "granted" ? (
+                <span className="flex items-center gap-1.5 text-[10.5px] text-mint">
+                  <Bell className="h-3.5 w-3.5" /> Desktop alerts enabled
+                </span>
+              ) : notificationPermission === "denied" ? (
+                <span className="flex items-center gap-1.5 text-[10.5px] text-white/40">
+                  <BellOff className="h-3.5 w-3.5" /> Allow alerts in browser settings
+                </span>
+              ) : notificationPermission === "unsupported" ? (
+                <span className="text-[10.5px] text-white/40">Desktop alerts are not supported by this browser</span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-glass !px-3 !py-1.5 text-[10.5px]"
+                  onClick={() => void enableDesktopNotifications()}
+                >
+                  <Bell className="h-3.5 w-3.5" /> Enable desktop alerts
+                </button>
+              )}
+            </div>
+            {newLeadCountError && (
+              <p role="alert" className="mt-2 text-[10.5px] text-coral">
+                Could not check for new WhatsApp enquiries: {newLeadCountError}
+              </p>
+            )}
+          </div>
+        )}
         {demoMode && (
           <div className="mb-4 rounded-2xl border border-sun/20 bg-sun/10 px-4 py-3 text-[11px] leading-relaxed text-sun">
             Client preview · Sample customer/order data only · Admin edits stay in this browser · No real payment or notifications
