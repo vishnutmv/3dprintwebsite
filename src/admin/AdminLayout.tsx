@@ -59,7 +59,7 @@ function LoginScreen() {
   };
 
   return (
-    <div className="relative grid min-h-screen place-items-center px-4">
+    <div className="admin-shell relative grid min-h-screen place-items-center px-4">
       <div className="glass-deep liquid-edge w-full max-w-[400px] rounded-[2rem] p-7">
         <AdminMark />
         <h1 className="mt-6 text-[26px] leading-tight">Studio admin</h1>
@@ -233,7 +233,7 @@ export function AdminLayout() {
   if (!authenticated) return <LoginScreen />;
 
   return (
-    <div className="mx-auto flex max-w-[1280px] gap-5 px-3 py-4">
+    <div className="admin-shell mx-auto flex max-w-[1280px] gap-5 px-3 py-4">
       <Toaster />
       <aside className="glass sticky top-4 hidden h-[calc(100vh-2rem)] w-[220px] shrink-0 flex-col rounded-3xl p-3 lg:flex">
         <div className="px-2 py-3">

@@ -6,7 +6,7 @@ export function Logo({ compact = false, to = "/" }: { compact?: boolean; to?: st
     <Link to={to} className="group flex items-center gap-3">
       <span
         className="relative grid h-10 w-10 place-items-center rounded-2xl text-[13px] font-black text-ink-950 shadow-glow transition-transform duration-300 group-hover:rotate-6"
-        style={{ background: "linear-gradient(140deg,#e5dbff,#a78bfa 46%,#7be0b4)" }}
+        style={{ background: "linear-gradient(140deg,#f3bd8f,#d86e40 58%,#e0c47e)" }}
       >
         3D
       </span>

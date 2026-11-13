@@ -5,19 +5,19 @@ export default {
     extend: {
       colors: {
         ink: {
-          950: "#07040f",
-          900: "#0b0718",
-          800: "#110b22",
-          700: "#191033",
+          950: "#f8f7f3",
+          900: "#f1efe9",
+          800: "#e8e5dc",
+          700: "#ddd9cf",
         },
         violet: {
-          400: "#a78bfa",
-          500: "#8b5cf6",
-          600: "#7c3aed",
+          400: "#e98957",
+          500: "#d86e40",
+          600: "#bd5530",
         },
-        coral: "#ff6b5a",
-        sun: "#ffd43b",
-        mint: "#7be0b4",
+        coral: "#bd4f3d",
+        sun: "#a87716",
+        mint: "#39785a",
       },
       fontFamily: {
         sans: ['"Segoe UI Variable"', "Inter", "system-ui", "-apple-system", "Segoe UI", "Arial", "sans-serif"],
@@ -28,9 +28,9 @@ export default {
         "4xl": "2rem",
       },
       boxShadow: {
-        glass: "0 24px 60px -24px rgba(5,2,20,.85), inset 0 1px 0 rgba(255,255,255,.14)",
-        glow: "0 0 0 1px rgba(167,139,250,.35), 0 18px 60px -18px rgba(139,92,246,.65)",
-        lift: "0 34px 80px -30px rgba(5,2,20,.95)",
+        glass: "0 18px 44px -28px rgba(37,34,24,.24), inset 0 1px 0 rgba(255,255,255,.8)",
+        glow: "0 0 0 1px rgba(216,110,64,.18), 0 14px 36px -18px rgba(189,85,48,.25)",
+        lift: "0 28px 60px -34px rgba(37,34,24,.32)",
       },
       keyframes: {
         drift: {

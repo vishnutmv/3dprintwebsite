@@ -40,7 +40,7 @@ export function SiteLayout() {
       )}
       <Backdrop />
       <ScrollToTop />
-      <div className="relative flex min-h-screen flex-col">
+      <div className="storefront-shell relative flex min-h-screen flex-col">
         <SiteHeader />
         <main className="relative z-10 flex-1">
           <Outlet />
