@@ -5,7 +5,9 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Gift, Sparkles } from "lucide-react";
 import { ProductCard } from "@/components/ProductCard";
+import { PromotionBanner } from "@/components/PromotionBanner";
 import { inr } from "@/lib/format";
+import { effectiveProductPrice, usePromotionClock } from "@/lib/promotions";
 import { useStore } from "@/lib/store";
 
 export function Home() {
@@ -13,6 +15,7 @@ export function Home() {
   const prizes = useStore((state) => state.prizes) ?? [];
   const loaded = useStore((state) => state.loaded);
   const message = useStore((state) => state.message);
+  const now = usePromotionClock();
 
   const featured = products.slice(0, 8);
   const heroProduct = featured[0];
@@ -97,7 +100,7 @@ export function Home() {
                   {heroProduct.category}
                 </p>
                 <p className="mt-1 text-[19px] font-semibold leading-tight">{heroProduct.name}</p>
-                <p className="mt-1 text-[13px] font-semibold">{inr(heroProduct.price)}</p>
+                <p className="mt-1 text-[13px] font-semibold">{inr(effectiveProductPrice(heroProduct, now))}</p>
               </div>
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-[#29312d] transition-transform group-hover:translate-x-1">
                 <ArrowRight className="h-4 w-4" />
@@ -106,6 +109,8 @@ export function Home() {
           </Link>
         )}
       </section>
+
+      <PromotionBanner products={products} />
 
       {/* Catalogue */}
       <section className="mt-12">

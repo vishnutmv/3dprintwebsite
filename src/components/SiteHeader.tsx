@@ -4,9 +4,10 @@
  * beyond this small utility link.
  */
 
-import { Link, NavLink } from "react-router-dom";
-import { MessageCircle, ShieldCheck, ShoppingBag } from "lucide-react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import { MessageCircle, ShieldCheck, ShoppingBag, UserRound } from "lucide-react";
 import { Logo } from "./Logo";
+import { rememberedCustomerCode } from "@/lib/customer";
 import { cn } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
@@ -17,8 +18,13 @@ const nav = [
 ];
 
 export function SiteHeader() {
+  // Re-render on navigation so the profile entry appears after a sign-in.
+  useLocation();
   const cartCount = useStore((state) => state.cart.reduce((sum, item) => sum + item.qty, 0));
   const whatsappContactUrl = useStore((state) => state.settings.whatsappContactUrl);
+  // The profile entry unlocks after a first order, when this browser has a
+  // customer code. New visitors still reach it from the footer or after checkout.
+  const hasProfile = Boolean(rememberedCustomerCode());
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-ink-950/70 backdrop-blur-xl">
@@ -58,6 +64,15 @@ export function SiteHeader() {
                 <MessageCircle className="h-4 w-4" />
                 <span className="hidden sm:inline">Enquire</span>
               </a>
+            )}
+            {hasProfile && (
+              <Link
+                to="/account"
+                className="grid h-9 w-9 place-items-center rounded-xl text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+                aria-label="Customer profile"
+              >
+                <UserRound className="h-4 w-4" />
+              </Link>
             )}
             <Link
               to="/cart"

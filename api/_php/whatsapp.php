@@ -152,6 +152,7 @@ function process_whatsapp_outbound_message(
     string $message,
     string $sentAt,
 ): void {
+    $message = whatsapp_safe_message($message);
     $pdo = db();
     $pdo->beginTransaction();
     try {
@@ -219,6 +220,19 @@ function process_whatsapp_lead(
     if ($name === '') $name = whatsapp_name_from_message($message) ?? '';
     if ($phone === null) $phone = whatsapp_phone_from_message($message);
     $knownCustomer = $phone !== null ? find_customer_by_phone($phone) : null;
+    if ($knownCustomer === null) {
+        $knownCustomer = one(
+            'SELECT c.id, c.full_name, c.phone FROM whatsapp_leads l JOIN customers c ON c.id=l.customer_id WHERE l.chat_id=?',
+            [$chatId],
+        );
+    }
+    if (
+        $knownCustomer !== null
+        && $type === 'chat'
+        && trim($message) !== ''
+        && preg_match('/^\s*(?:stop|unsubscribe|opt\s*out|remove\s*me)[.! ]*$/i', $message) !== 1
+    ) $isBusinessEnquiry = true;
+    $storedMessage = whatsapp_safe_message($message);
     $pdo->beginTransaction();
     try {
         if (
@@ -242,7 +256,7 @@ function process_whatsapp_lead(
             'INSERT IGNORE INTO whatsapp_leads (id, chat_id, phone_e164, customer_id, contact_name, last_message, last_message_at, status, is_business_enquiry, is_existing_customer, business_enquiry_at, enquiry_interest) '
                 . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, IF(?, ?, NULL), ?)',
             [
-                new_id(), $chatId, $phone, $knownCustomer['id'] ?? null, $name !== '' ? $name : ($knownCustomer['full_name'] ?? ''), $message, $receivedAt,
+                new_id(), $chatId, $phone, $knownCustomer['id'] ?? null, $name !== '' ? $name : ($knownCustomer['full_name'] ?? ''), $storedMessage, $receivedAt,
                 $isBusinessEnquiry ? 'new' : 'active',
                 $isBusinessEnquiry ? 1 : 0,
                 $knownCustomer ? 1 : 0,
@@ -273,7 +287,7 @@ function process_whatsapp_lead(
                     $phone, $knownCustomer['id'] ?? null, $knownCustomer ? 1 : 0,
                     $name !== '' ? $name : ($knownCustomer['full_name'] ?? ''),
                     $name !== '' ? $name : ($knownCustomer['full_name'] ?? ''),
-                    $receivedAt, $message, $receivedAt, $status,
+                    $receivedAt, $storedMessage, $receivedAt, $status,
                     $isBusinessEnquiry ? 1 : 0, $isBusinessEnquiry ? 1 : 0, $receivedAt,
                     $isBusinessEnquiry ? (whatsapp_enquiry_query($message) ?? '') : '',
                     $isBusinessEnquiry ? (whatsapp_enquiry_query($message) ?? '') : '',
@@ -297,7 +311,7 @@ function process_whatsapp_lead(
             && (bool)$existing['is_business_enquiry']
             && !preg_match('/^\s*(?:stop|unsubscribe|opt\s*out|remove\s*me)[.! ]*$/i', $message)
         ) {
-            $detail = mb_substr(trim($message), 0, 1000);
+            $detail = mb_substr(trim($storedMessage), 0, 1000);
             $interest = trim((string)($existing['enquiry_interest'] ?? ''));
             $interest = mb_substr($interest === '' ? $detail : $interest . "\n---\n" . $detail, -2500);
             run(
@@ -318,7 +332,7 @@ function process_whatsapp_lead(
         run(
             'INSERT INTO whatsapp_messages (id, lead_id, provider_message_id, direction, message_type, body, created_at) '
                 . 'VALUES (?, ?, ?, "inbound", ?, ?, ?)',
-            [new_id(), $lead['id'], $messageId, $type, $message, $receivedAt],
+            [new_id(), $lead['id'], $messageId, $type, $storedMessage, $receivedAt],
         );
         $pdo->commit();
     } catch (Throwable $error) {
@@ -373,6 +387,16 @@ function claim_whatsapp_auto_reply(string $leadId): bool
     return $result->rowCount() === 1;
 }
 
+function whatsapp_safe_message(string $message): string
+{
+    $safe = preg_replace(
+        '/\b(?:otp|(?:sign[\s-]?in|verification|login|one[- ]time)?\s*code)\b\D{0,30}\d{6}\b/i',
+        '[one-time code redacted]',
+        $message,
+    );
+    return is_string($safe) ? $safe : '[message redacted]';
+}
+
 function send_whatsapp_product_reply(string $chatId, string $name, string $query, ?string $phone): bool
 {
     global $config;
@@ -384,11 +408,11 @@ function send_whatsapp_product_reply(string $chatId, string $name, string $query
     }
 
     $products = all(
-        'SELECT name, price FROM products WHERE is_active=1 AND stock_quantity>0 ORDER BY created_at DESC LIMIT 3',
+        'SELECT * FROM products WHERE is_active=1 AND stock_quantity>0 ORDER BY created_at DESC LIMIT 3',
     );
     $lines = [];
     foreach ($products as $product) {
-        $lines[] = '• ' . text_value($product['name'], 90) . ' — ₹' . number_format((int)$product['price'] / 100, 2);
+        $lines[] = '• ' . text_value($product['name'], 90) . ' — ₹' . number_format(active_product_price($product) / 100, 2);
     }
     $shopBase = trim((string)($config['storefront_url'] ?? ''));
     if (!short_url($shopBase) || strtolower((string)parse_url($shopBase, PHP_URL_SCHEME)) !== 'https') {
@@ -442,16 +466,17 @@ function send_whatsapp_product_reply(string $chatId, string $name, string $query
         && ($result['status'] ?? '') === 'success'
         && ($result['data']['status'] ?? '') === 'success'
     ) {
+        $storedBody = whatsapp_safe_message($body);
         $lead = one('SELECT id FROM whatsapp_leads WHERE chat_id=?', [$chatId]);
         if ($lead) {
             run(
                 'UPDATE whatsapp_leads SET last_message=?, last_message_at=UTC_TIMESTAMP(), updated_at=CURRENT_TIMESTAMP WHERE id=?',
-                [$body, $lead['id']],
+                [$storedBody, $lead['id']],
             );
             run(
                 'INSERT INTO whatsapp_messages (id, lead_id, direction, message_type, body, created_at) '
                     . 'VALUES (?, ?, "outbound", "chat", ?, UTC_TIMESTAMP())',
-                [new_id(), $lead['id'], $body],
+                [new_id(), $lead['id'], $storedBody],
             );
         }
         return true;
@@ -463,6 +488,83 @@ function send_whatsapp_product_reply(string $chatId, string $name, string $query
 function whatsapp_chat_url(?string $phone): string
 {
     return $phone !== null && preg_match('/^\d{6,20}$/', $phone) ? 'https://wa.me/' . $phone : '';
+}
+
+/**
+ * A business enquiry is overdue when its latest customer message has not been
+ * answered by a human within five minutes. Automated replies also update
+ * last_message_at, so the inbound message time is used as the clock.
+ */
+function whatsapp_overdue_sql(string $alias = 'l'): string
+{
+    $inbound = '(SELECT MAX(m.created_at) FROM whatsapp_messages m WHERE m.lead_id=' . $alias . '.id AND m.direction="inbound")';
+    return '(' . $alias . '.is_business_enquiry=1 AND ' . $alias . '.status<>"closed"'
+        . ' AND COALESCE(' . $inbound . ',' . $alias . '.last_message_at)<=UTC_TIMESTAMP()-INTERVAL 5 MINUTE'
+        . ' AND (' . $alias . '.last_admin_reply_at IS NULL OR '
+        . $alias . '.last_admin_reply_at<COALESCE(' . $inbound . ',' . $alias . '.last_message_at)))';
+}
+
+function whatsapp_awaiting_admin_since(array $lead, ?string $lastInboundAt = null): ?string
+{
+    if (!(bool)($lead['is_business_enquiry'] ?? false) || ($lead['status'] ?? '') === 'closed') return null;
+    $lastInbound = $lastInboundAt ?? ($lead['last_message_at'] ?? null);
+    if ($lastInbound === null || $lastInbound === '') return null;
+    $reply = $lead['last_admin_reply_at'] ?? null;
+    if ($reply !== null && $reply !== '' && strtotime((string)$reply) >= strtotime((string)$lastInbound)) return null;
+    return (string)$lastInbound;
+}
+
+function send_whatsapp_media(string $chatId, string $mediaBase64, string $mediaName, string $caption): bool
+{
+    return send_whatsapp_media_payload($chatId, [
+        'mediaBase64' => $mediaBase64,
+        'mediaName' => $mediaName,
+    ], $caption);
+}
+
+function send_whatsapp_media_url(string $chatId, string $mediaUrl, string $caption): bool
+{
+    if (!short_url($mediaUrl) || strtolower((string)parse_url($mediaUrl, PHP_URL_SCHEME)) !== 'https') return false;
+    return send_whatsapp_media_payload($chatId, ['mediaUrl' => $mediaUrl], $caption);
+}
+
+function send_whatsapp_media_payload(string $chatId, array $media, string $caption): bool
+{
+    global $config;
+    $token = (string)($config['waapi_api_token'] ?? '');
+    $instanceId = (string)($config['waapi_instance_id'] ?? '');
+    if ($token === '' || !preg_match('/^\d+$/', $instanceId)) {
+        error_log('[interserver-api] WaAPI API token or instance id is not configured.');
+        return false;
+    }
+    $context = stream_context_create(['http' => [
+        'method' => 'POST',
+        'header' => 'Authorization: Bearer ' . $token . "\r\nContent-Type: application/json\r\n",
+        'content' => json_encode(
+            array_merge(['chatId' => $chatId, 'caption' => $caption], $media),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+        ),
+        'timeout' => 15,
+        'ignore_errors' => true,
+    ]]);
+    $response = @file_get_contents(
+        'https://waapi.app/api/v1/instances/' . rawurlencode($instanceId) . '/client/action/send-media',
+        false,
+        $context,
+    );
+    $status = 0;
+    foreach (($http_response_header ?? []) as $header) {
+        if (preg_match('/^HTTP\/\S+\s+(\d+)/', $header, $match)) $status = (int)$match[1];
+    }
+    $result = is_string($response) ? json_decode($response, true) : null;
+    if (
+        $status >= 200 && $status < 300
+        && is_array($result)
+        && ($result['status'] ?? '') === 'success'
+        && ($result['data']['status'] ?? '') === 'success'
+    ) return true;
+    error_log('[interserver-api] WaAPI send-media failed with HTTP status ' . $status);
+    return false;
 }
 
 function send_whatsapp_text(string $chatId, string $body): bool
@@ -531,6 +633,7 @@ function send_whatsapp_notification(string $phone, string $name, string $body): 
 
 function record_whatsapp_outbound_message(string $chatId, string $name, ?string $phone, string $body): void
 {
+    $body = whatsapp_safe_message($body);
     $pdo = db();
     $pdo->beginTransaction();
     try {
@@ -591,7 +694,7 @@ function send_due_whatsapp_followups(): int
             run('UPDATE whatsapp_leads SET auto_followup_due_at=DATE_ADD(UTC_TIMESTAMP(), INTERVAL 5 MINUTE) WHERE id=?', [$lead['id']]);
             continue;
         }
-        $message = "Just checking in — we're here if you need help with your 3D printing enquiry.\n"
+        $message = "Thanks for your message. Your query will be answered shortly by our team.\n"
             . 'Browse products and prices: ' . rtrim($shopBase, '/') . '/shop';
         if (send_whatsapp_text((string)$lead['chat_id'], $message)) {
             run(

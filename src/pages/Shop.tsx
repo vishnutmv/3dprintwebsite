@@ -5,6 +5,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { EmptyState, SectionHead } from "@/components/ui";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/format";
+import { effectiveProductPrice, usePromotionClock } from "@/lib/promotions";
 
 const priceBands = [
   { id: "all", label: "Any price" },
@@ -22,6 +23,7 @@ const sorts = [
 
 export function Shop() {
   const products = useStore((state) => state.products);
+  const now = usePromotionClock();
   const [params, setParams] = useSearchParams();
   const activeCategory = params.get("category") ?? "All";
   const [query, setQuery] = useState("");
@@ -38,7 +40,7 @@ export function Shop() {
       if (activeCategory !== "All" && product.category !== activeCategory) return false;
       if (query && !`${product.name} ${product.category}`.toLowerCase().includes(query.toLowerCase()))
         return false;
-      const rupees = product.price / 100;
+      const rupees = effectiveProductPrice(product, now) / 100;
       if (band === "under1000" && rupees >= 1000) return false;
       if (band === "1000to2000" && (rupees < 1000 || rupees > 2000)) return false;
       if (band === "over2000" && rupees <= 2000) return false;
@@ -46,14 +48,14 @@ export function Shop() {
     });
 
     list = [...list].sort((a, b) => {
-      if (sort === "price-asc") return a.price - b.price;
-      if (sort === "price-desc") return b.price - a.price;
+      if (sort === "price-asc") return effectiveProductPrice(a, now) - effectiveProductPrice(b, now);
+      if (sort === "price-desc") return effectiveProductPrice(b, now) - effectiveProductPrice(a, now);
       if (sort === "rating") return b.rating - a.rating;
       return Number(Boolean(b.badge)) - Number(Boolean(a.badge));
     });
 
     return list;
-  }, [products, activeCategory, query, band, sort]);
+  }, [products, activeCategory, query, band, sort, now]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 pt-24">

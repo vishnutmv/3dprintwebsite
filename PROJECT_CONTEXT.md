@@ -186,6 +186,7 @@ The live database is MariaDB. The project includes both a fresh schema and incre
 - `migrations/0012_whatsapp_business_triggers.sql`: business-trigger/lead fields and behavior support.
 - `migrations/0013_rewards_campaigns_invoices.sql`: rewards, campaigns, invoice/order related additions.
 - `migrations/0014_collaborator_gifts_and_enquiry_details.sql`: prize quantity, WhatsApp lead detail/existing-customer fields, phone index adjustment, collaborators, collaborator offers, and linkage to prizes.
+- `migrations/0015_promotions_customer_otp_ids.sql`: product promotion price/start/end columns, wider `customer_code` and `order_number`, `orders.whatsapp_invoice_sent_at`, and the `customer_otp_challenges` table used by WhatsApp customer sign-in.
 
 For an existing database:
 
@@ -255,8 +256,9 @@ PHP linting, MariaDB migration execution, provider webhooks, payment flows, invo
 1. Confirm the correct source changes are saved in the project and included in the repository's deployment branch.
 2. Run `npm run build`.
 3. Push/deploy through the configured Git/Vercel workflow.
-4. Check that the Vercel deployment succeeds and that the live admin route loads. Hard-refresh to clear stale assets if needed.
-5. Ensure the exact Vercel origin is allowed in the PHP API's server-side `allowed_origins` configuration.
+4. Deploy the matching PHP files to InterServer and apply the pending migration in the same release window. Checkout now saves the order first and opens Razorpay through `payments/create-order`, so pair the frontend and API versions rather than leaving one behind.
+5. Check that the Vercel deployment succeeds and that the live admin route loads. Hard-refresh to clear stale assets if needed.
+6. Ensure the exact Vercel origin is allowed in the PHP API's server-side `allowed_origins` configuration.
 
 ### PHP API and media on InterServer
 
@@ -318,6 +320,10 @@ The project has evolved through these user-requested areas:
 9. Added WhatsApp lead/customer matching, details shown in admin and safeguards against counting known customers as cold-lead conversions.
 10. Added admin attention indicators for leads.
 11. Refined trigger matching to recognize compact/spaced brand forms and request/question wording, while suppressing messages that merely mention the business without an apparent enquiry.
+12. Added time-boxed product offers with IST start/end times, live storefront countdowns, and server-side re-pricing so the displayed cart total cannot go stale.
+13. Restricted delivery to Tamil Nadu districts in both the checkout UI and the API.
+14. Added customer accounts: `ddmmyyyy`-prefixed customer IDs and `ORD-ddmmyyyy-…` order numbers, six-digit WhatsApp one-time-code sign-in, a profile unlocked after the first order, and a dismissible returning-customer prompt.
+15. Fixed the WhatsApp media helpers (they were declared inside another function, which broke invoice media and paid-order image messages), and changed the admin unanswered-enquiry alert to stay red until a human replies rather than clearing when the automated follow-up is sent.
 
 Recent frontend areas/files include:
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ExternalLink, Loader2, MessageCircle, RefreshCw } from "lucide-react";
-import { dateTime } from "@/lib/format";
+import { dateTime, parseDateTime } from "@/lib/format";
 import { getLeads, updateLeadStatus, type AdminLead } from "@/lib/admin";
 import { useToast } from "@/lib/toast";
 import { WhatsAppChat } from "./WhatsAppChat";
@@ -8,32 +8,54 @@ import { WhatsAppChat } from "./WhatsAppChat";
 type LeadFilter = "all" | AdminLead["status"];
 type ChatFilter = "all" | "business";
 
+const FIVE_MINUTES = 5 * 60_000;
+
+/** True when the customer's latest message has gone unanswered for 5+ minutes. */
+function unansweredOverFiveMinutes(lead: AdminLead, now: number): boolean {
+  return Boolean(
+    lead.awaitingAdminSince
+    && parseDateTime(lead.awaitingAdminSince).getTime() + FIVE_MINUTES <= now,
+  );
+}
+
 export function AdminLeads() {
   const toast = useToast((state) => state.push);
   const [leads, setLeads] = useState<AdminLead[]>([]);
   const [newCount, setNewCount] = useState(0);
+  const [overdueCount, setOverdueCount] = useState(0);
+  const [now, setNow] = useState(Date.now());
   const [filter, setFilter] = useState<LeadFilter>("all");
   const [chatFilter, setChatFilter] = useState<ChatFilter>("business");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const result = await getLeads();
       setLeads(result.leads);
       setNewCount(result.newCount);
+      setOverdueCount(result.overdueCount);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load WhatsApp enquiries.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    const refresh = window.setInterval(() => void load(true), 15_000);
+    return () => {
+      window.clearInterval(timer);
+      window.clearInterval(refresh);
+    };
   }, [load]);
 
   const filteredLeads = useMemo(
@@ -64,7 +86,7 @@ export function AdminLeads() {
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/35">CRM</p>
           <h1 className="mt-1.5 text-[clamp(24px,3vw,30px)]">WhatsApp inbox</h1>
           <p className="mt-1 text-[12.5px] text-white/45">
-            {newCount} new business {newCount === 1 ? "enquiry" : "enquiries"} need attention.
+            {newCount} new · {overdueCount} unanswered for over 5 minutes
           </p>
         </div>
         <button type="button" className="btn-glass" onClick={() => void load()} disabled={loading}>
@@ -128,7 +150,14 @@ export function AdminLeads() {
       ) : (
         <div className="grid gap-3">
           {filteredLeads.map((lead) => (
-            <article key={lead.id} className="glass rounded-3xl p-5">
+            <article
+              key={lead.id}
+              className={`glass rounded-3xl p-5 ${
+                unansweredOverFiveMinutes(lead, now)
+                  ? "animate-pulse border border-coral/60 shadow-[0_0_24px_rgba(248,113,113,.12)]"
+                  : ""
+              }`}
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -188,6 +217,11 @@ export function AdminLeads() {
               <p className="mt-2 text-[10px] text-white/35">
                 Latest activity {dateTime(lead.lastMessageAt)}
               </p>
+              {unansweredOverFiveMinutes(lead, now) && (
+                <p className="mt-2 inline-flex rounded-full border border-coral/35 bg-coral/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-coral">
+                  Unanswered by the team for over 5 minutes · automated reply sent
+                </p>
+              )}
 
               <WhatsAppChat chatId={lead.chatId} phone={lead.phone} name={lead.name} />
 

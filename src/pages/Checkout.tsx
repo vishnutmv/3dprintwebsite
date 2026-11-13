@@ -7,20 +7,22 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2, Lock, ShieldCheck } from "lucide-react";
 import { inr } from "@/lib/format";
-import { apiPost } from "@/lib/api";
-import { openRazorpayCheckout, verifyRazorpayPayment } from "@/lib/razorpay";
+import { ApiError, apiPost } from "@/lib/api";
+import { createPaymentSession, openRazorpayCheckout, verifyRazorpayPayment } from "@/lib/razorpay";
 import { rememberCustomerCode, rememberOrderCode } from "@/lib/customer";
 import { demoMode } from "@/lib/demo-mode";
+import { tamilNaduDistricts } from "@/lib/regions";
+import { usePromotionClock } from "@/lib/promotions";
 import { cartLines, useStore } from "@/lib/store";
-import type { CheckoutContact, CheckoutSession, Order } from "@/lib/types";
+import type { CheckoutContact, Order } from "@/lib/types";
 
 const emptyContact: CheckoutContact = {
   name: "",
   email: "",
   phone: "",
   address: "",
-  city: "",
-  state: "",
+  city: "Chennai",
+  state: "Tamil Nadu",
   postalCode: "",
   marketingOptIn: false,
 };
@@ -31,12 +33,15 @@ export function Checkout() {
   const products = useStore((state) => state.products);
   const settings = useStore((state) => state.settings);
   const clearCart = useStore((state) => state.clearCart);
+  const fetchProducts = useStore((state) => state.fetchProducts);
+  const fetchSettings = useStore((state) => state.fetchSettings);
+  const now = usePromotionClock();
 
   const [contact, setContact] = useState<CheckoutContact>(emptyContact);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const lines = cartLines({ cart, products });
+  const lines = cartLines({ cart, products }, now);
   const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
   const shipping = subtotal === 0 || subtotal >= settings.freeShippingOver ? 0 : settings.shippingFlat;
   const total = subtotal + shipping;
@@ -64,15 +69,18 @@ export function Checkout() {
     if (contact.phone.replace(/\D/g, "").length < 10) {
       return "Phone number should have at least 10 digits.";
     }
-    if (!/^\d{4,6}$/.test(contact.postalCode.trim())) {
-      return "PIN / postal code should be 4–6 digits.";
+    if (!/^(?:\+?91)?[6-9]\d{9}$/.test(contact.phone.replace(/\D/g, ""))) {
+      return "Enter a valid Indian mobile number.";
+    }
+    if (!/^[6]\d{5}$/.test(contact.postalCode.trim())) {
+      return "Enter a valid 6-digit Tamil Nadu PIN code.";
     }
     if (
       contact.address.trim().length < 5 ||
-      contact.city.trim().length < 2 ||
-      contact.state.trim().length < 2
+      !tamilNaduDistricts.includes(contact.city as (typeof tamilNaduDistricts)[number]) ||
+      contact.state !== "Tamil Nadu"
     ) {
-      return "Please fill every delivery field.";
+      return "Delivery is currently available only to Tamil Nadu districts.";
     }
     return null;
   };
@@ -95,44 +103,53 @@ export function Checkout() {
     }
 
     setBusy(true);
-    let created:
-      | { order: Order; session: CheckoutSession }
-      | undefined;
+    let created: { order: Order } | undefined;
 
     try {
-      created = await apiPost<{ order: Order; session: CheckoutSession }>("/api/orders", {
+      created = await apiPost<{ order: Order }>("/api/orders", {
         contact,
+        expectedTotal: total,
         items: lines.map((line) => ({
           productId: line.product.id,
           quantity: line.qty,
         })),
       });
 
-      rememberCustomerCode(created.session.customerCode);
-      rememberOrderCode(created.session.orderNumber, created.session.customerCode);
+      const customerCode = created.order.customerCode;
+      rememberCustomerCode(customerCode);
+      rememberOrderCode(created.order.orderNumber, customerCode);
 
       if (demoMode) {
         clearCart();
         navigate(
-          `/order/${created.order.orderNumber}?code=${encodeURIComponent(created.session.customerCode)}&notice=demo`,
+          `/order/${created.order.orderNumber}?code=${encodeURIComponent(customerCode)}&notice=demo`,
           { replace: true },
         );
         return;
       }
 
+      // The order is saved first; the Razorpay order is created separately so a
+      // gateway error still leaves the customer with a reachable order page.
+      const session = await createPaymentSession(created.order.orderNumber, customerCode);
       const callback = await openRazorpayCheckout({
-        session: created.session,
+        session,
         storeName: settings.storeName,
         description: `${lines.length} print${lines.length === 1 ? "" : "s"} · ${settings.storeName}`,
       });
 
       const order = await verifyRazorpayPayment(callback);
       clearCart();
-      navigate(`/order/${order.orderNumber}?code=${encodeURIComponent(created.session.customerCode)}`, {
+      navigate(`/order/${order.orderNumber}?code=${encodeURIComponent(customerCode)}`, {
         replace: true,
       });
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Payment failed.";
+
+      // A 409 means the server repriced the cart (for example an offer ended).
+      // Refresh the catalogue so the customer sees the new total before retrying.
+      if (caught instanceof ApiError && caught.status === 409) {
+        await Promise.all([fetchProducts(), fetchSettings()]);
+      }
 
       // The order is already saved centrally; send the customer to its status
       // page instead of losing the reference when checkout is dismissed.
@@ -141,7 +158,7 @@ export function Checkout() {
           message === "cancelled" ? "cancelled" : message.includes("failed") ? "failed" : "pending";
         navigate(
           `/order/${created.order.orderNumber}?code=${encodeURIComponent(
-            created.session.customerCode,
+            created.order.customerCode,
           )}&notice=${notice}`,
         );
         return;
@@ -184,16 +201,18 @@ export function Checkout() {
               <input id="address" className="field" value={contact.address} onChange={setField("address")} placeholder="Flat / street / landmark" autoComplete="street-address" />
             </div>
             <div>
-              <label className="label" htmlFor="city">City</label>
-              <input id="city" className="field" value={contact.city} onChange={setField("city")} placeholder="Chennai" autoComplete="address-level2" />
+              <label className="label" htmlFor="city">District</label>
+              <select id="city" className="field" value={contact.city} onChange={(event) => setContact((current) => ({ ...current, city: event.target.value }))} autoComplete="address-level2">
+                {tamilNaduDistricts.map((district) => <option key={district} value={district}>{district}</option>)}
+              </select>
             </div>
             <div>
               <label className="label" htmlFor="state">State</label>
-              <input id="state" className="field" value={contact.state} onChange={setField("state")} placeholder="Tamil Nadu" autoComplete="address-level1" />
+              <input id="state" className="field" value="Tamil Nadu" readOnly autoComplete="address-level1" />
             </div>
             <div>
               <label className="label" htmlFor="postalCode">PIN code</label>
-              <input id="postalCode" className="field" value={contact.postalCode} onChange={setField("postalCode")} placeholder="600041" inputMode="numeric" autoComplete="postal-code" />
+              <input id="postalCode" className="field" value={contact.postalCode} onChange={setField("postalCode")} placeholder="600041" inputMode="numeric" maxLength={6} autoComplete="postal-code" />
             </div>
             <label className="sm:col-span-2 flex items-start gap-2 text-[11px] leading-relaxed text-white/50">
               <input

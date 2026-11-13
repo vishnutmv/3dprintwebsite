@@ -25,7 +25,7 @@ import { cn } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { useToast } from "@/lib/toast";
 import { demoMode } from "@/lib/demo-mode";
-import { getNewLeadCount } from "@/lib/admin";
+import { getLeadCounts } from "@/lib/admin";
 
 const nav = [
   { to: "/admin", label: "Dashboard", icon: Gauge, end: true },
@@ -130,6 +130,8 @@ export function AdminLayout() {
   const toast = useToast((state) => state.push);
   const location = useLocation();
   const [newLeadCount, setNewLeadCount] = useState(0);
+  const [overdueLeadCount, setOverdueLeadCount] = useState(0);
+  const [attentionCount, setAttentionCount] = useState(0);
   const [newLeadCountError, setNewLeadCountError] = useState("");
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
     () => typeof Notification === "undefined" ? "unsupported" : Notification.permission,
@@ -146,22 +148,27 @@ export function AdminLayout() {
   useEffect(() => {
     if (!authenticated) return;
     let active = true;
-    let previousCount: number | null = null;
+    let previousCounts: { newCount: number; overdueCount: number } | null = null;
     const refreshCount = async () => {
       try {
-        const count = await getNewLeadCount();
+        const counts = await getLeadCounts();
         if (active) {
-          setNewLeadCount(count);
+          setNewLeadCount(counts.newCount);
+          setOverdueLeadCount(counts.overdueCount);
+          setAttentionCount(counts.attentionCount);
           setNewLeadCountError("");
-          if (previousCount !== null && count > previousCount) {
-            const addedCount = count - previousCount;
-            const message = `${addedCount} new WhatsApp ${addedCount === 1 ? "enquiry" : "enquiries"} need attention.`;
+          const newlyOverdue = previousCounts !== null && counts.overdueCount > previousCounts.overdueCount;
+          const newlyNew = previousCounts !== null && counts.newCount > previousCounts.newCount;
+          if (newlyOverdue || newlyNew) {
+            const message = newlyOverdue
+              ? `${counts.overdueCount} WhatsApp ${counts.overdueCount === 1 ? "enquiry is" : "enquiries are"} unanswered for over 5 minutes.`
+              : `${counts.newCount} new WhatsApp ${counts.newCount === 1 ? "enquiry needs" : "enquiries need"} attention.`;
             toast(message, "warn");
             if (document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
               try {
-                const notification = new Notification("New WhatsApp enquiry", {
+                const notification = new Notification(newlyOverdue ? "Unanswered WhatsApp enquiry" : "New WhatsApp enquiry", {
                   body: message,
-                  tag: "new-whatsapp-enquiry",
+                  tag: newlyOverdue ? "overdue-whatsapp-enquiry" : "new-whatsapp-enquiry",
                 });
                 notification.onclick = () => {
                   window.focus();
@@ -173,7 +180,7 @@ export function AdminLayout() {
               }
             }
           }
-          previousCount = count;
+          previousCounts = { newCount: counts.newCount, overdueCount: counts.overdueCount };
         }
       } catch (caught) {
         if (active) {
@@ -210,10 +217,10 @@ export function AdminLayout() {
 
   useEffect(() => {
     const originalTitle = document.title;
-    if (newLeadCount > 0) document.title = `(${newLeadCount}) New WhatsApp enquiry · 3D Print Co.`;
+    if (attentionCount > 0) document.title = `(${attentionCount}) WhatsApp attention · 3D Print Co.`;
     else document.title = originalTitle;
     return () => { document.title = originalTitle; };
-  }, [newLeadCount]);
+  }, [attentionCount]);
 
   const handleSignOut = async () => {
     try {
@@ -249,8 +256,10 @@ export function AdminLayout() {
               className={({ isActive }) =>
                 cn(
                   "flex items-center gap-2.5 rounded-2xl px-3 py-2.5 text-[13px] font-medium transition",
-                  item.to === "/admin/leads" && newLeadCount > 0
-                    ? "animate-pulse border border-sun/20 bg-sun/[0.08] text-sun"
+                  item.to === "/admin/leads" && overdueLeadCount > 0
+                    ? "animate-pulse border border-coral/30 bg-coral/[0.08] text-coral"
+                    : item.to === "/admin/leads" && newLeadCount > 0
+                    ? "border border-sun/20 bg-sun/[0.08] text-sun"
                     : isActive
                     ? "bg-violet-500/20 text-white shadow-[inset_0_1px_0_rgba(255,255,255,.12)]"
                     : "text-white/50 hover:bg-white/[0.05] hover:text-white",
@@ -259,9 +268,11 @@ export function AdminLayout() {
             >
               <item.icon className="h-4 w-4" />
               <span>{item.label}</span>
-              {item.to === "/admin/leads" && newLeadCount > 0 && (
-                <span className="ml-auto min-w-5 animate-pulse rounded-full bg-sun px-1.5 py-0.5 text-center text-[9px] font-bold text-ink-950">
-                  {newLeadCount > 99 ? "99+" : newLeadCount}
+              {item.to === "/admin/leads" && attentionCount > 0 && (
+                <span className={`ml-auto min-w-5 rounded-full px-1.5 py-0.5 text-center text-[9px] font-bold text-ink-950 ${
+                  overdueLeadCount > 0 ? "animate-pulse bg-coral" : "bg-sun"
+                }`}>
+                  {attentionCount > 99 ? "99+" : attentionCount}
                 </span>
               )}
             </NavLink>
@@ -298,7 +309,9 @@ export function AdminLayout() {
           <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-[11.5px] text-white/55">
-                New WhatsApp enquiries appear in the inbox and trigger an in-panel alert.
+                {overdueLeadCount > 0
+                  ? `${overdueLeadCount} WhatsApp ${overdueLeadCount === 1 ? "enquiry is" : "enquiries are"} unanswered for over 5 minutes.`
+                  : "New WhatsApp enquiries appear in the inbox and trigger an in-panel alert."}
               </p>
               {notificationPermission === "granted" ? (
                 <span className="flex items-center gap-1.5 text-[10.5px] text-mint">
@@ -341,17 +354,21 @@ export function AdminLayout() {
               className={({ isActive }) =>
                 cn(
                   "flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-medium",
-                  item.to === "/admin/leads" && newLeadCount > 0
-                    ? "animate-pulse bg-sun/[0.08] text-sun"
+                  item.to === "/admin/leads" && overdueLeadCount > 0
+                    ? "animate-pulse bg-coral/[0.08] text-coral"
+                    : item.to === "/admin/leads" && newLeadCount > 0
+                    ? "bg-sun/[0.08] text-sun"
                     : isActive ? "bg-violet-500/25 text-white" : "text-white/50",
                 )
               }
             >
               <item.icon className="h-3.5 w-3.5" />
               <span>{item.label}</span>
-              {item.to === "/admin/leads" && newLeadCount > 0 && (
-                <span className="animate-pulse rounded-full bg-sun px-1.5 py-0.5 text-[9px] font-bold text-ink-950">
-                  {newLeadCount > 99 ? "99+" : newLeadCount}
+              {item.to === "/admin/leads" && attentionCount > 0 && (
+                <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold text-ink-950 ${
+                  overdueLeadCount > 0 ? "animate-pulse bg-coral" : "bg-sun"
+                }`}>
+                  {attentionCount > 99 ? "99+" : attentionCount}
                 </span>
               )}
             </NavLink>

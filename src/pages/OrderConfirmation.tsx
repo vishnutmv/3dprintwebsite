@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Download, Loader2, Lock, RefreshCw } from "lucide-react";
 import { StatusPill } from "@/components/ui";
 import { apiGet, apiPost } from "@/lib/api";
-import { inr } from "@/lib/format";
+import { fullDateTime, inr } from "@/lib/format";
 import {
   createPaymentSession,
   openRazorpayCheckout,
@@ -83,12 +83,22 @@ export function OrderConfirmation() {
     setInvoiceStatus("Preparing your PDF invoice…");
     try {
       const pdf = createInvoicePdf(currentOrder);
-      await apiPost<{ sent: boolean }>("/api/invoices/send", {
+      const request = {
         orderNumber: currentOrder.orderNumber,
         customerCode: code,
         pdfBase64: invoicePdfBase64(pdf),
-      });
-      setInvoiceStatus(`Invoice emailed to ${currentOrder.email || "your checkout email"}.`);
+      };
+      const [emailResult, whatsappResult] = await Promise.allSettled([
+        apiPost<{ sent: boolean }>("/api/invoices/send", request),
+        apiPost<{ sent: boolean }>("/api/invoices/whatsapp", request),
+      ]);
+      const emailMessage = emailResult.status === "fulfilled"
+        ? `email sent to ${currentOrder.email || "your checkout email"}`
+        : `email failed: ${emailResult.reason instanceof Error ? emailResult.reason.message : "delivery error"}`;
+      const whatsappMessage = whatsappResult.status === "fulfilled"
+        ? "WhatsApp PDF sent"
+        : `WhatsApp failed: ${whatsappResult.reason instanceof Error ? whatsappResult.reason.message : "delivery error"}`;
+      setInvoiceStatus(`Invoice ${emailMessage}; ${whatsappMessage}.`);
     } catch (caught) {
       setInvoiceStatus(caught instanceof Error ? caught.message : "The invoice email could not be sent.");
     } finally {
@@ -166,7 +176,7 @@ export function OrderConfirmation() {
             </div>
             <h1 className="mt-3 text-2xl font-semibold text-white">{order.orderNumber}</h1>
             <p className="mt-1 text-sm text-white/40">
-              {new Date(order.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+              {fullDateTime(order.createdAt)}
             </p>
           </div>
           <div className="shrink-0 text-right">
@@ -305,9 +315,9 @@ export function OrderConfirmation() {
         {paid && (
           <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-white/45">
             <span>{invoiceSending ? <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> : null}{invoiceStatus || "Preparing invoice email…"}</span>
-            {invoiceStatus && !invoiceStatus.startsWith("Invoice emailed") && (
-              <button type="button" onClick={() => void emailInvoice(order)} disabled={invoiceSending} className="text-violet-200 underline underline-offset-2 disabled:opacity-50">
-                Retry email
+            {invoiceStatus && !invoiceStatus.startsWith("Invoice email sent") && (
+            <button type="button" onClick={() => void emailInvoice(order)} disabled={invoiceSending} className="text-violet-200 underline underline-offset-2 disabled:opacity-50">
+                Retry invoice delivery
               </button>
             )}
           </div>

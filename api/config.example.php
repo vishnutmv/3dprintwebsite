@@ -22,6 +22,7 @@ return [
     'whatsapp_business_number' => '',
     'waapi_instance_id' => '',
     'waapi_api_token' => '',
+    'customer_otp_secret' => '',
     'waapi_webhook_secret' => '',
     'waapi_cron_secret' => '',
     'storefront_url' => '',

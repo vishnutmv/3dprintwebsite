@@ -8,6 +8,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Box, Check, Clock, Play, Ruler } from "lucide-react";
 import { ModelViewer } from "@/components/ModelViewer";
 import { inr } from "@/lib/format";
+import { effectiveProductPrice, promotionState, usePromotionClock } from "@/lib/promotions";
 import { useStore } from "@/lib/store";
 
 export function ProductDetail() {
@@ -16,6 +17,7 @@ export function ProductDetail() {
   const loaded = useStore((state) => state.loaded);
   const cart = useStore((state) => state.cart);
   const addToCart = useStore((state) => state.addToCart);
+  const now = usePromotionClock();
   const [activeImage, setActiveImage] = useState(0);
   const [activeMedia, setActiveMedia] = useState<"image" | "video" | "model">("model");
 
@@ -39,6 +41,8 @@ export function ProductDetail() {
     );
   }
 
+  const price = effectiveProductPrice(product, now);
+  const onOffer = promotionState(product, now) === "active";
   const inCart = cart.find((item) => item.productId === product.id)?.qty ?? 0;
   const images = product.images?.length ? product.images : product.imageUrl ? [product.imageUrl] : [];
   const activeMediaView =
@@ -171,11 +175,16 @@ export function ProductDetail() {
           <p className="mt-4 text-[13.5px] leading-relaxed text-white/55">{product.description}</p>
 
           <div className="mt-5 flex items-end gap-3">
-            <span className="num text-[30px] font-bold text-white">{inr(product.price)}</span>
-            {product.mrp && (
-              <span className="num text-[14px] text-white/30 line-through">{inr(product.mrp)}</span>
+            <span className="num text-[30px] font-bold text-white">{inr(price)}</span>
+            {(onOffer ? product.price : product.mrp) && (
+              <span className="num text-[14px] text-white/30 line-through">{inr(onOffer ? product.price : product.mrp ?? product.price)}</span>
             )}
           </div>
+          {(product.recentSoldCount ?? 0) > 0 && (
+            <p className="mt-2 text-[11px] font-medium text-mint/80">
+              {product.recentSoldCount} purchased in the last 30 days
+            </p>
+          )}
 
           <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
             {specs.map((spec) => {

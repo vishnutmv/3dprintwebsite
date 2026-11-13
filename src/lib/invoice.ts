@@ -21,7 +21,7 @@ export function createInvoicePdf(order: Order): jsPDF {
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(10);
   pdf.text(`Order: ${order.orderNumber}`, left, y);
-  pdf.text(`Date: ${new Date(order.createdAt).toLocaleDateString("en-IN")}`, right, y, { align: "right" });
+  pdf.text(`Date: ${shortDate(order.createdAt)}`, right, y, { align: "right" });
   y += 24;
   pdf.setDrawColor(210);
   pdf.line(left, y, right, y);
@@ -158,7 +158,7 @@ export function createRewardCardPdf(reward: RewardCardDetails): jsPDF {
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
   pdf.text("Thank you for being part of our community.", 180, 470, { align: "center" });
-  if (reward.revealedAt) pdf.text(`Revealed ${new Date(reward.revealedAt).toLocaleDateString("en-IN")}`, 180, 488, { align: "center" });
+  if (reward.revealedAt) pdf.text(`Revealed ${shortDate(reward.revealedAt)}`, 180, 488, { align: "center" });
   return pdf;
 }
 
@@ -168,3 +168,4 @@ export function invoicePdfBase64(pdf: jsPDF): string {
   if (separator < 0) throw new Error("Invoice PDF could not be encoded.");
   return data.slice(separator + 1);
 }
+import { shortDate } from "@/lib/format";

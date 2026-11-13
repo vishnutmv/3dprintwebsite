@@ -10,6 +10,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { apiGet } from "./api";
 import type { CartItem, Prize, Product, StoreSettings } from "./types";
+import { effectiveProductPrice, serverNow, setServerClock } from "./promotions";
 
 type CartLine = { product: Product; qty: number; lineTotal: number };
 
@@ -77,6 +78,7 @@ export const useStore = create<State>()(
         try {
           const { settings } = await apiGet<{ settings: StoreSettings }>("/api/settings");
           if (!settings || typeof settings !== "object") throw new Error("The settings API returned invalid data.");
+          setServerClock(settings.serverTime);
           set({ settings: { ...fallbackSettings, ...settings } });
         } catch (error) {
           console.error("Could not load store settings:", error);
@@ -148,11 +150,11 @@ export const useStore = create<State>()(
   ),
 );
 
-export function cartLines(state: Pick<State, "cart" | "products">): CartLine[] {
+export function cartLines(state: Pick<State, "cart" | "products">, now = serverNow()): CartLine[] {
   return state.cart.flatMap((item) => {
     const product = state.products.find((candidate) => candidate.id === item.productId);
     if (!product) return [];
-    return [{ product, qty: item.qty, lineTotal: product.price * item.qty }];
+    return [{ product, qty: item.qty, lineTotal: effectiveProductPrice(product, now) * item.qty }];
   });
 }
 
@@ -160,8 +162,8 @@ export function cartPercent(state: Pick<State, "cart">) {
   return state.cart.reduce((sum, item) => sum + item.qty, 0);
 }
 
-export function cartSubtotal(state: Pick<State, "cart" | "products">): number {
-  return cartLines(state).reduce((sum, line) => sum + line.lineTotal, 0);
+export function cartSubtotal(state: Pick<State, "cart" | "products">, now = serverNow()): number {
+  return cartLines(state, now).reduce((sum, line) => sum + line.lineTotal, 0);
 }
 
 export type { State };

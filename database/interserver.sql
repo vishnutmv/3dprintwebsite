@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS products (
   description TEXT NOT NULL,
   price INT UNSIGNED NOT NULL,
   mrp INT UNSIGNED NULL,
+  promotion_price INT UNSIGNED NULL,
+  promotion_start_at DATETIME NULL,
+  promotion_end_at DATETIME NULL,
   category VARCHAR(80) NOT NULL DEFAULT 'Uncategorised',
   stock_quantity INT UNSIGNED NOT NULL DEFAULT 0,
   images JSON NOT NULL,
@@ -30,7 +33,7 @@ CREATE TABLE IF NOT EXISTS products (
 
 CREATE TABLE IF NOT EXISTS customers (
   id CHAR(36) NOT NULL PRIMARY KEY,
-  customer_code VARCHAR(13) NOT NULL UNIQUE,
+  customer_code VARCHAR(18) NOT NULL UNIQUE,
   full_name VARCHAR(120) NOT NULL,
   email VARCHAR(254) NULL,
   phone VARCHAR(24) NOT NULL,
@@ -45,9 +48,22 @@ CREATE TABLE IF NOT EXISTS customers (
   UNIQUE KEY uq_customers_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS customer_otp_challenges (
+  customer_id CHAR(36) NOT NULL PRIMARY KEY,
+  otp_hash CHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  request_count TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  window_started_at DATETIME NOT NULL,
+  last_sent_at DATETIME NOT NULL,
+  verified_at DATETIME NULL,
+  CONSTRAINT fk_customer_otp_customer
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS orders (
   id CHAR(36) NOT NULL PRIMARY KEY,
-  order_number CHAR(12) NOT NULL UNIQUE,
+  order_number VARCHAR(23) NOT NULL UNIQUE,
   customer_id CHAR(36) NOT NULL,
   subtotal INT UNSIGNED NOT NULL,
   shipping_charge INT UNSIGNED NOT NULL DEFAULT 0,
@@ -57,6 +73,7 @@ CREATE TABLE IF NOT EXISTS orders (
   razorpay_order_id VARCHAR(64) NULL UNIQUE,
   razorpay_payment_id VARCHAR(64) NULL,
   invoice_sent_at DATETIME NULL,
+  whatsapp_invoice_sent_at DATETIME NULL,
   notes VARCHAR(2000) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

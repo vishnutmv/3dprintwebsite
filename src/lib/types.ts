@@ -14,6 +14,11 @@ export type Product = {
   category: string;
   price: number; // paise
   mrp?: number; // paise
+  promotionPrice?: number | null; // paise
+  promotionStartAt?: string | null;
+  promotionEndAt?: string | null;
+  promotionActive?: boolean;
+  currentPrice?: number;
   description: string;
   material: string;
   dimensions: string;
@@ -114,6 +119,8 @@ export type StoreSettings = {
   shippingFlat: number; // paise
   razorpayKeyId: string;
   paymentsReady: boolean;
+  /** Server clock (UTC ISO) so storefront timers match server pricing. */
+  serverTime?: string;
   notifyEmail: string;
   whatsappContactUrl?: string;
   notifications?: { email: boolean; webhook: boolean };

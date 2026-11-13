@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { Backdrop } from "./Backdrop";
 import { SiteHeader } from "./SiteHeader";
 import { SiteFooter } from "./SiteFooter";
+import { ReturningCustomerPrompt } from "./ReturningCustomerPrompt";
 import { Toaster } from "./Toaster";
 import { useStore } from "@/lib/store";
 import { demoMode } from "@/lib/demo-mode";
@@ -47,6 +48,7 @@ export function SiteLayout() {
         </main>
         <SiteFooter />
       </div>
+      <ReturningCustomerPrompt />
       <Toaster />
     </>
   );

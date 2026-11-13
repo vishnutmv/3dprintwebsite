@@ -6,6 +6,9 @@
 
 const CUSTOMER_KEY = "3dp-customer-code";
 const ORDER_MAP_KEY = "3dp-order-codes";
+const ACCOUNT_PROMPT_KEY = "3dp-account-prompt-dismissed";
+const ACCOUNT_PROMPT_DAYS = 7;
+
 
 export function rememberCustomerCode(code: string): void {
   try {
@@ -47,4 +50,22 @@ export function rememberOrderCode(orderNumber: string, code: string): void {
 
 export function orderAccessCode(orderNumber: string): string {
   return readMap()[orderNumber] ?? "";
+}
+
+/** Hide the returning-customer sign-in card for a while (after sign-in or "Not now"). */
+export function dismissAccountPrompt(): void {
+  try {
+    localStorage.setItem(ACCOUNT_PROMPT_KEY, String(Date.now()));
+  } catch {
+    // Storage can be disabled; the card still closes for this visit.
+  }
+}
+
+export function accountPromptDismissed(): boolean {
+  try {
+    const dismissedAt = Number(localStorage.getItem(ACCOUNT_PROMPT_KEY) ?? 0);
+    return Number.isFinite(dismissedAt) && dismissedAt > 0 && Date.now() - dismissedAt < ACCOUNT_PROMPT_DAYS * 86_400_000;
+  } catch {
+    return false;
+  }
 }

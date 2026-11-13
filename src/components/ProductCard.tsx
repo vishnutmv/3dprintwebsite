@@ -7,9 +7,13 @@
 import { Link } from "react-router-dom";
 import { Box } from "lucide-react";
 import { inr } from "@/lib/format";
+import { effectiveProductPrice, promotionState, usePromotionClock } from "@/lib/promotions";
 import type { Product } from "@/lib/types";
 
 export function ProductCard({ product }: { product: Product }) {
+  const now = usePromotionClock();
+  const price = effectiveProductPrice(product, now);
+  const onOffer = promotionState(product, now) === "active";
   return (
     <Link
       to={`/product/${product.slug}`}
@@ -37,8 +41,9 @@ export function ProductCard({ product }: { product: Product }) {
             }}
           />
         )}
-        {(product.badge || product.trendTag) && (
+        {(product.badge || product.trendTag || onOffer) && (
           <div className="absolute left-3 top-3 flex flex-col items-start gap-1">
+            {onOffer && <span className="rounded-full bg-coral px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-white shadow-sm">Offer</span>}
             {product.badge && <span className="rounded-full border border-white/20 bg-white/85 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.14em] text-ink-950 shadow-sm">{product.badge}</span>}
             {product.trendTag && <span className="rounded-full border border-sun/25 bg-ink-950/90 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-sun shadow-sm">{product.trendTag}</span>}
           </div>
@@ -58,9 +63,9 @@ export function ProductCard({ product }: { product: Product }) {
 
         <div className="mt-auto flex items-end justify-between pt-3">
           <div>
-            <span className="num text-[16px] font-bold text-white">{inr(product.price)}</span>
-            {product.mrp && (
-              <span className="ml-2 text-[11px] text-white/30 line-through">{inr(product.mrp)}</span>
+            <span className="num text-[16px] font-bold text-white">{inr(price)}</span>
+            {(onOffer ? product.price : product.mrp) && (
+              <span className="ml-2 text-[11px] text-white/30 line-through">{inr(onOffer ? product.price : product.mrp ?? product.price)}</span>
             )}
           </div>
           <span className="text-[10.5px] text-white/35">
@@ -74,6 +79,11 @@ export function ProductCard({ product }: { product: Product }) {
           <span className="text-white/20">·</span>
           {product.reviews} reviews
         </div>
+        {(product.recentSoldCount ?? 0) > 0 && (
+          <p className="mt-1 text-[10px] font-medium text-mint/80">
+            {product.recentSoldCount} purchased in the last 30 days
+          </p>
+        )}
       </div>
     </Link>
   );

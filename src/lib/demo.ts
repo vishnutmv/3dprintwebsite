@@ -1,7 +1,12 @@
 import type { Order, Prize, Product, StoreSettings } from "./types";
+import { newCustomerId, newOrderId } from "./format";
 
 const DEMO_DB_KEY = "3dp-client-demo-v1";
 const DEMO_SESSION_KEY = "3dp-client-demo-session";
+const DEMO_CUSTOMER_SESSION_KEY = "3dp-client-demo-customer";
+
+/** The preview never sends WhatsApp messages; this fixed code stands in for OTP. */
+const DEMO_OTP_CODE = "123456";
 
 type DemoProduct = Product & { active: boolean; createdAt: string };
 type DemoOrder = Order & { marketingOptIn?: boolean };
@@ -173,12 +178,21 @@ function seedDemoDb(): DemoDb {
     sampleProduct("demo-p-08", "cable-dock", "Snap-fit Cable Dock", "Functional", 29900, "organiser", "#c084fc", "Everyday utility", "A tidy snap-fit cable holder for a cleaner workstation.", "PETG", 22),
   ];
 
+  // Sample live offers so the preview shows the countdown surfaces.
+  const offerStart = new Date(Date.now() - 3_600_000).toISOString();
+  const offerEnd = new Date(Date.now() + 2 * 86_400_000).toISOString();
+  for (const [index, promotionPrice] of [[0, 99900], [6, 89900]] as const) {
+    products[index].promotionPrice = promotionPrice;
+    products[index].promotionStartAt = offerStart;
+    products[index].promotionEndAt = offerEnd;
+  }
+
   const sampleOrders: DemoOrder[] = [
-    { id: "demo-o-01", orderNumber: "DPC-26041", customerId: "demo-c-01", customerCode: "3DP-K4M2-9XQP", customerName: "Aarav Menon", phone: "+91 98400 11288", email: "aarav@example.com", address: "12 Beach Road", city: "Chennai", state: "Tamil Nadu", pin: "600041", postalCode: "600041", subtotal: 129900, shipping: 0, total: 129900, status: "delivered", orderStatus: "delivered", paymentStatus: "paid", paymentId: "demo_pay_001", uid: "3DP-K4M2-9XQP", createdAt: daysAgo(2), marketingOptIn: true, items: [{ productId: "demo-p-01", name: "Articulated Desk Dragon", qty: 1, price: 129900, lineTotal: 129900 }] },
-    { id: "demo-o-02", orderNumber: "DPC-26040", customerId: "demo-c-02", customerCode: "3DP-P7N3-B6TA", customerName: "Diya Raman", phone: "+91 98840 22110", email: "diya@example.com", address: "4 Lake View Street", city: "Coimbatore", state: "Tamil Nadu", pin: "641001", postalCode: "641001", subtotal: 159800, shipping: 0, total: 159800, status: "shipped", orderStatus: "shipped", paymentStatus: "paid", paymentId: "demo_pay_002", uid: "3DP-P7N3-B6TA", createdAt: daysAgo(4), marketingOptIn: true, items: [{ productId: "demo-p-02", name: "Modular Desk Organiser", qty: 1, price: 89900, lineTotal: 89900 }, { productId: "demo-p-04", name: "Ripple Mini Planter", qty: 1, price: 69900, lineTotal: 69900 }] },
-    { id: "demo-o-03", orderNumber: "DPC-26039", customerId: "demo-c-03", customerCode: "3DP-H8V5-Q2LM", customerName: "Kabir Shah", phone: "+91 98765 43210", email: "kabir@example.com", address: "21 MG Road", city: "Bengaluru", state: "Karnataka", pin: "560001", postalCode: "560001", subtotal: 49900, shipping: 4900, total: 54800, status: "processing", orderStatus: "processing", paymentStatus: "paid", paymentId: "demo_pay_003", uid: "3DP-H8V5-Q2LM", createdAt: daysAgo(6), items: [{ productId: "demo-p-03", name: "Kinetic Gear Fidget", qty: 1, price: 49900, lineTotal: 49900 }] },
-    { id: "demo-o-04", orderNumber: "DPC-26038", customerId: "demo-c-04", customerCode: "3DP-C5R9-W3JD", customerName: "Mira Iyer", phone: "+91 90030 44556", email: "mira@example.com", address: "8 Park Avenue", city: "Chennai", state: "Tamil Nadu", pin: "600028", postalCode: "600028", subtotal: 119900, shipping: 4900, total: 124800, status: "confirmed", orderStatus: "confirmed", paymentStatus: "paid", paymentId: "demo_pay_004", uid: "3DP-C5R9-W3JD", createdAt: daysAgo(8), items: [{ productId: "demo-p-07", name: "Lattice Table Vase", qty: 1, price: 119900, lineTotal: 119900 }] },
-    { id: "demo-o-05", orderNumber: "DPC-26037", customerId: "demo-c-05", customerCode: "3DP-T1Z6-A8KU", customerName: "Neel Joshi", phone: "+91 98100 77889", email: "neel@example.com", address: "17 Station Road", city: "Hyderabad", state: "Telangana", pin: "500001", postalCode: "500001", subtotal: 159900, shipping: 0, total: 159900, status: "pending", orderStatus: "pending", paymentStatus: "pending", uid: "3DP-T1Z6-A8KU", createdAt: daysAgo(10), items: [{ productId: "demo-p-05", name: "Guardian Knight Figure", qty: 1, price: 159900, lineTotal: 159900 }] },
+    { id: "demo-o-01", orderNumber: "ORD-11112026-A1B2C3D4E5", customerId: "demo-c-01", customerCode: "11112026K4M29XQPAB", customerName: "Aarav Menon", phone: "+91 98400 11288", email: "aarav@example.com", address: "12 Beach Road", city: "Chennai", state: "Tamil Nadu", pin: "600041", postalCode: "600041", subtotal: 129900, shipping: 0, total: 129900, status: "delivered", orderStatus: "delivered", paymentStatus: "paid", paymentId: "demo_pay_001", uid: "11112026K4M29XQPAB", createdAt: daysAgo(2), marketingOptIn: true, items: [{ productId: "demo-p-01", name: "Articulated Desk Dragon", qty: 1, price: 129900, lineTotal: 129900 }] },
+    { id: "demo-o-02", orderNumber: "ORD-09112026-F6G7H8J9K0", customerId: "demo-c-02", customerCode: "09112026P7N3B6TAQ9", customerName: "Diya Raman", phone: "+91 98840 22110", email: "diya@example.com", address: "4 Lake View Street", city: "Coimbatore", state: "Tamil Nadu", pin: "641001", postalCode: "641001", subtotal: 159800, shipping: 0, total: 159800, status: "shipped", orderStatus: "shipped", paymentStatus: "paid", paymentId: "demo_pay_002", uid: "09112026P7N3B6TAQ9", createdAt: daysAgo(4), marketingOptIn: true, items: [{ productId: "demo-p-02", name: "Modular Desk Organiser", qty: 1, price: 89900, lineTotal: 89900 }, { productId: "demo-p-04", name: "Ripple Mini Planter", qty: 1, price: 69900, lineTotal: 69900 }] },
+    { id: "demo-o-03", orderNumber: "ORD-07112026-M1N2P3Q4R5", customerId: "demo-c-03", customerCode: "07112026H8V5Q2LMN4", customerName: "Kabir Shah", phone: "+91 98765 43210", email: "kabir@example.com", address: "21 Bypass Road", city: "Madurai", state: "Tamil Nadu", pin: "625001", postalCode: "625001", subtotal: 49900, shipping: 4900, total: 54800, status: "processing", orderStatus: "processing", paymentStatus: "paid", paymentId: "demo_pay_003", uid: "07112026H8V5Q2LMN4", createdAt: daysAgo(6), items: [{ productId: "demo-p-03", name: "Kinetic Gear Fidget", qty: 1, price: 49900, lineTotal: 49900 }] },
+    { id: "demo-o-04", orderNumber: "ORD-05112026-S6T7U8V9W0", customerId: "demo-c-04", customerCode: "05112026C5R9W3JDT8", customerName: "Mira Iyer", phone: "+91 90030 44556", email: "mira@example.com", address: "8 Park Avenue", city: "Chennai", state: "Tamil Nadu", pin: "600028", postalCode: "600028", subtotal: 119900, shipping: 4900, total: 124800, status: "confirmed", orderStatus: "confirmed", paymentStatus: "paid", paymentId: "demo_pay_004", uid: "05112026C5R9W3JDT8", createdAt: daysAgo(8), items: [{ productId: "demo-p-07", name: "Lattice Table Vase", qty: 1, price: 119900, lineTotal: 119900 }] },
+    { id: "demo-o-05", orderNumber: "ORD-03112026-X1Y2Z3A4B5", customerId: "demo-c-05", customerCode: "03112026T1Z6A8KUB2", customerName: "Neel Joshi", phone: "+91 98100 77889", email: "neel@example.com", address: "17 Station Road", city: "Tiruchirappalli", state: "Tamil Nadu", pin: "620001", postalCode: "620001", subtotal: 159900, shipping: 0, total: 159900, status: "pending", orderStatus: "pending", paymentStatus: "pending", uid: "03112026T1Z6A8KUB2", createdAt: daysAgo(10), items: [{ productId: "demo-p-05", name: "Guardian Knight Figure", qty: 1, price: 159900, lineTotal: 159900 }] },
   ];
 
   const prizes: DemoPrize[] = [
@@ -260,6 +274,30 @@ function customersFrom(orders: Order[]): DemoCustomer[] {
       marketingOptIn: (order as DemoOrder).marketingOptIn === true,
     };
   });
+}
+
+function demoPhoneDigits(value: string): string {
+  return value.replace(/\D/g, "").slice(-10);
+}
+
+function demoCustomerSession(db: DemoDb, phone: string) {
+  const digits = demoPhoneDigits(phone);
+  if (digits.length !== 10) return null;
+  const orders = db.orders.filter((order) => demoPhoneDigits(order.phone) === digits);
+  const customer = customersFrom(orders)[0];
+  if (!customer) return null;
+  return {
+    customer: {
+      code: customer.customerCode,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      city: customer.city,
+      state: customer.state,
+      postalCode: customer.postalCode,
+    },
+    orders,
+  };
 }
 
 function productSales(db: DemoDb, product: DemoProduct): DemoProduct {
@@ -385,13 +423,44 @@ export async function demoApiRequest<T>(
     return jsonResponse({ products: db.products.filter((product) => product.active).map((product) => productSales(db, product)) }) as T;
   }
   if (route === "/api/settings" && method === "GET") {
-    return jsonResponse({ settings: db.settings }) as T;
+    return jsonResponse({ settings: { ...db.settings, serverTime: new Date().toISOString() } }) as T;
   }
   if (route === "/api/prizes" && method === "GET") {
     return jsonResponse({
       prizes: db.prizes.filter((prize) => prize.active && prize.status === "open"
         && !db.collaborators.flatMap((item) => item.offers).some((offer) => offer.prizeId === prize.id)),
     }) as T;
+  }
+
+  // Customer sign-in mirrors the PHP flow. The preview cannot send WhatsApp, so
+  // it accepts a fixed code and says so in the response.
+  if (route === "/api/customer/auth/request" && method === "POST") {
+    const session = demoCustomerSession(db, String(payload.phone ?? ""));
+    return jsonResponse({
+      message: session
+        ? `Demo preview: use the code ${DEMO_OTP_CODE} to sign in.`
+        : "If an account exists for this number, a sign-in code has been sent.",
+    }) as T;
+  }
+  if (route === "/api/customer/auth/verify" && method === "POST") {
+    const phone = String(payload.phone ?? "");
+    if (String(payload.code ?? "").trim() !== DEMO_OTP_CODE) {
+      badRequest("The code is invalid or expired.", 400);
+    }
+    const session = demoCustomerSession(db, phone);
+    if (!session) badRequest("The code is invalid or expired.", 400);
+    localStorage.setItem(DEMO_CUSTOMER_SESSION_KEY, demoPhoneDigits(phone));
+    return jsonResponse(session) as T;
+  }
+  if (route === "/api/customer/session" && method === "GET") {
+    const phone = localStorage.getItem(DEMO_CUSTOMER_SESSION_KEY) ?? "";
+    const session = phone ? demoCustomerSession(db, phone) : null;
+    if (!session) badRequest("Sign in with your WhatsApp number to view your profile.", 401);
+    return jsonResponse(session) as T;
+  }
+  if (route === "/api/customer/logout" && method === "POST") {
+    localStorage.removeItem(DEMO_CUSTOMER_SESSION_KEY);
+    return jsonResponse({ ok: true }) as T;
   }
 
   if (route === "/api/orders" && method === "POST") {
@@ -404,19 +473,31 @@ export async function demoApiRequest<T>(
       const quantity = Math.min(product.stock, Math.max(1, Number(item.quantity) || 1));
       return { product, quantity };
     });
-    const subtotal = products.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-    const shipping = subtotal >= db.settings.freeShippingOver ? 0 : db.settings.shippingFlat;
     const customerName = String(contact.name ?? "Demo Customer");
     const email = String(contact.email ?? "");
     const phone = String(contact.phone ?? "");
     const city = String(contact.city ?? "");
-    const customerCode = `3DP-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const unitPrice = (product: DemoProduct): number => {
+      const startsAt = product.promotionStartAt ? Date.parse(product.promotionStartAt) : NaN;
+      const endsAt = product.promotionEndAt ? Date.parse(product.promotionEndAt) : NaN;
+      return product.promotionPrice
+        && Number.isFinite(startsAt) && Number.isFinite(endsAt)
+        && startsAt <= Date.now() && Date.now() < endsAt
+        ? product.promotionPrice
+        : product.price;
+    };
+    const subtotal = products.reduce((sum, item) => sum + unitPrice(item.product) * item.quantity, 0);
+    const shipping = subtotal >= db.settings.freeShippingOver ? 0 : db.settings.shippingFlat;
+    const digits = phone.replace(/\D/g, "").slice(-10);
+    const previous = db.orders.find((order) => order.phone.replace(/\D/g, "").slice(-10) === digits);
+    const customerCode = previous?.customerCode ?? newCustomerId();
+    const customerId = previous?.customerId ?? customerCode;
     const now = new Date().toISOString();
-    const orderNumber = `DPC-DEMO-${Date.now().toString().slice(-6)}`;
+    const orderNumber = newOrderId();
     const order: DemoOrder = {
       id: orderNumber,
       orderNumber,
-      customerId: customerCode,
+      customerId,
       customerCode,
       customerName,
       phone,
@@ -439,8 +520,8 @@ export async function demoApiRequest<T>(
         productId: product.id,
         name: product.name,
         qty: quantity,
-        price: product.price,
-        lineTotal: product.price * quantity,
+        price: unitPrice(product),
+        lineTotal: unitPrice(product) * quantity,
         imageUrl: product.imageUrl,
       })),
     };

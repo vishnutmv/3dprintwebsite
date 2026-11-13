@@ -28,11 +28,16 @@ export function AdminInsights() {
   if (error || !data) return <p className="rounded-xl border border-coral/30 bg-coral/[0.08] px-3 py-2 text-sm text-coral">{error || "No insight data is available."}</p>;
 
   const countsByDay = new Map(data.dailyPaidOrders.map((day) => [day.day, day.count]));
+  // The API groups paid orders by IST calendar day, so build IST day keys here.
+  const istDay = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
   const dailySeries = Array.from({ length: 30 }, (_, index) => {
-    const date = new Date();
-    date.setUTCHours(0, 0, 0, 0);
-    date.setUTCDate(date.getUTCDate() - (29 - index));
-    const day = date.toISOString().slice(0, 10);
+    const date = new Date(Date.now() - (29 - index) * 86_400_000);
+    const day = istDay.format(date);
     return { day, count: countsByDay.get(day) ?? 0 };
   });
   const maxDaily = Math.max(1, ...dailySeries.map((day) => day.count));

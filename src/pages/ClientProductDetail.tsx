@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ModelViewer } from "../components/ModelViewer";
 import { useStore } from "../lib/store";
+import { effectiveProductPrice, promotionState, usePromotionClock } from "../lib/promotions";
 function Badge({ text, color = "#fb7185" }: { text: string; color?: string }) {
   if (!text) return null;
   return <span className="inline-block px-2 py-0.5 text-[11px] font-semibold rounded-full" style={{ background: `${color}22`, color, border: `1px solid ${color}44` }}>{text}</span>;
@@ -10,6 +11,7 @@ function Badge({ text, color = "#fb7185" }: { text: string; color?: string }) {
 export function ClientProductDetail() {
   const { slug } = useParams<{ slug: string }>();
   const products = useStore((state: { products: import("../lib/types").Product[] }) => state.products);
+  const now = usePromotionClock();
   const product = products.find((p) => p.slug === slug);
   const [loading, setLoading] = useState(!product);
   const cart = useStore((state) => state.cart);
@@ -44,6 +46,8 @@ export function ClientProductDetail() {
 
   const qty = inCart ? inCart.qty : 0;
   const stockOk = product.stock > 0;
+  const price = effectiveProductPrice(product, now);
+  const onOffer = promotionState(product, now) === "active";
 
   const addToCartAction = useStore.getState().addToCart;
 
@@ -71,9 +75,9 @@ export function ClientProductDetail() {
 
             <h1 className="text-3xl font-bold text-white leading-tight mb-2">{product.name}</h1>
             <div className="flex items-baseline gap-3 mb-4">
-              <span className="text-2xl font-semibold text-white">₹{product.price.toLocaleString("en-IN")}</span>
-              {product.mrp && (
-                <span className="text-lg text-white/40 line-through">₹{product.mrp.toLocaleString("en-IN")}</span>
+              <span className="text-2xl font-semibold text-white">₹{(price / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              {(onOffer ? product.price : product.mrp) && (
+                <span className="text-lg text-white/40 line-through">₹{((onOffer ? product.price : product.mrp ?? product.price) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
               )}
             </div>
 

@@ -10,6 +10,7 @@ if (!is_file($configPath)) {
 }
 $config = require $configPath;
 
+date_default_timezone_set('UTC');
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
 header('Content-Type: application/json; charset=utf-8');
@@ -53,6 +54,7 @@ function db(): PDO
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]
         );
+        $pdo->exec("SET time_zone = '+00:00'");
     } catch (Throwable $e) {
         error_log('[interserver-api] database connection failed: ' . $e->getMessage());
         fail(503, 'Database is unavailable. Check the InterServer API configuration.');
@@ -101,9 +103,15 @@ function product_out(array $row): array
 {
     $images = is_array($row['images'] ?? null) ? $row['images'] : json_array($row['images'] ?? null);
     $specs = is_array($row['specifications'] ?? null) ? $row['specifications'] : json_array($row['specifications'] ?? null);
+    $currentPrice = active_product_price($row);
     $result = [
         'id' => $row['id'], 'slug' => $row['slug'], 'name' => $row['name'],
         'category' => $row['category'], 'price' => (int)$row['price'],
+        'currentPrice' => $currentPrice,
+        'promotionActive' => $currentPrice < (int)$row['price'],
+        'promotionPrice' => isset($row['promotion_price']) ? (int)$row['promotion_price'] : null,
+        'promotionStartAt' => utc_iso($row['promotion_start_at'] ?? null),
+        'promotionEndAt' => utc_iso($row['promotion_end_at'] ?? null),
         'description' => $row['description'], 'material' => $row['material'],
         'dimensions' => $row['dimensions'], 'printTime' => $row['print_time'],
         'stock' => (int)$row['stock_quantity'], 'variant' => $row['variant'],
@@ -129,6 +137,69 @@ function product_out(array $row): array
         $result['updatedAt'] = $row['updated_at'] ?? null;
     }
     return $result;
+}
+
+function active_product_price(array $product): int
+{
+    $price = (int)$product['price'];
+    $promotionPrice = $product['promotion_price'] ?? null;
+    $startAt = $product['promotion_start_at'] ?? null;
+    $endAt = $product['promotion_end_at'] ?? null;
+    if ($promotionPrice === null || $startAt === null || $endAt === null) return $price;
+    $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    $start = new DateTimeImmutable((string)$startAt, new DateTimeZone('UTC'));
+    $end = new DateTimeImmutable((string)$endAt, new DateTimeZone('UTC'));
+    return $start <= $now && $now < $end ? (int)$promotionPrice : $price;
+}
+
+function utc_iso(?string $value): ?string
+{
+    if ($value === null || $value === '') return null;
+    return (new DateTimeImmutable($value, new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
+}
+
+function customer_code(): string
+{
+    return (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('dmY')
+        . strtoupper(bin2hex(random_bytes(5)));
+}
+
+function order_number(): string
+{
+    return 'ORD-' . (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata')))->format('dmY')
+        . '-' . strtoupper(bin2hex(random_bytes(5)));
+}
+
+function normalize_indian_mobile(string $phone): ?string
+{
+    $digits = (string)preg_replace('/\D/', '', $phone);
+    if (str_starts_with($digits, '91') && strlen($digits) === 12) $digits = substr($digits, 2);
+    if (str_starts_with($digits, '0') && strlen($digits) === 11) $digits = substr($digits, 1);
+    if (!preg_match('/^[6-9]\d{9}$/', $digits)) return null;
+    return '91' . $digits;
+}
+
+function tamil_nadu_districts(): array
+{
+    return [
+        'Ariyalur', 'Chengalpattu', 'Chennai', 'Coimbatore', 'Cuddalore', 'Dharmapuri',
+        'Dindigul', 'Erode', 'Kallakurichi', 'Kancheepuram', 'Kanniyakumari', 'Karur',
+        'Krishnagiri', 'Madurai', 'Mayiladuthurai', 'Nagapattinam', 'Namakkal', 'Nilgiris',
+        'Perambalur', 'Pudukkottai', 'Ramanathapuram', 'Ranipet', 'Salem', 'Sivaganga',
+        'Tenkasi', 'Thanjavur', 'Theni', 'Thoothukudi', 'Tiruchirappalli', 'Tirunelveli',
+        'Tirupathur', 'Tiruppur', 'Tiruvallur', 'Tiruvannamalai', 'Tiruvarur', 'Vellore',
+        'Viluppuram', 'Virudhunagar',
+    ];
+}
+
+function valid_customer_code(string $code): bool
+{
+    return preg_match('/^(?:3DP-[A-Z0-9]{4}-[A-Z0-9]{4}|\d{8}[A-Z0-9]{10})$/', $code) === 1;
+}
+
+function valid_order_number(string $number): bool
+{
+    return preg_match('/^(?:ORD-[A-Z0-9]{8}|ORD-\d{8}-[A-Z0-9]{10})$/', $number) === 1;
 }
 
 function prize_out(array $row, bool $public = false): array
@@ -273,8 +344,9 @@ function settings_public(array $settings): array
         'storeName' => $settings['storeName'], 'supportEmail' => $settings['supportEmail'],
         'supportPhone' => $settings['supportPhone'], 'city' => $settings['city'],
         'gstin' => $settings['gstin'], 'freeShippingOver' => $settings['freeShippingOver'],
-        'shippingFlat' => $settings['shippingFlat'], 'razorpayKeyId' => $test ? $key : '',
+        'shippingFlat' => $settings['shippingFlat'],        'razorpayKeyId' => $test ? $key : '',
         'paymentsReady' => $test,
+        'serverTime' => gmdate('Y-m-d\TH:i:s\Z'),
         'whatsappContactUrl' => preg_match('/^\d{6,20}$/', $whatsappNumber) ? 'https://wa.me/' . $whatsappNumber . '?text=Hi%2C%20I%27d%20like%20to%20enquire%20about%20your%20products.' : '',
         'notifications' => notification_capabilities(),
     ];

@@ -10,6 +10,31 @@ function product_values(array $input, bool $partial): array
         if (mb_strlen($name) < 2) fail(400, 'Product name is required.');
         $values['name'] = $name;
     }
+    if ($has('promotionPrice') || !$partial) {
+        $rawPromotionPrice = $input['promotionPrice'] ?? null;
+        if ($rawPromotionPrice === null || $rawPromotionPrice === '') $values['promotion_price'] = null;
+        else {
+            $promotionPrice = filter_var($rawPromotionPrice, FILTER_VALIDATE_INT);
+            if ($promotionPrice === false || $promotionPrice < 1 || $promotionPrice > 100000000) fail(400, 'Promotion price must be a positive whole number in paise.');
+            $values['promotion_price'] = $promotionPrice;
+        }
+    }
+    foreach (['promotionStartAt' => 'promotion_start_at', 'promotionEndAt' => 'promotion_end_at'] as $key => $column) {
+        if ($has($key) || !$partial) {
+            $raw = $input[$key] ?? null;
+            if ($raw === null || $raw === '') {
+                $values[$column] = null;
+            } elseif (!is_string($raw) || !preg_match('/(?:Z|[+-]\d{2}:\d{2})$/', $raw)) {
+                fail(400, 'Promotion dates must include an explicit timezone.');
+            } else {
+                try {
+                    $values[$column] = (new DateTimeImmutable($raw))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+                } catch (Throwable) {
+                    fail(400, 'Promotion date is invalid.');
+                }
+            }
+        }
+    }
     if ($has('slug')) {
         $slug = strtolower(trim((string)$input['slug']));
         $slug = trim(substr((string)preg_replace('/[^a-z0-9]+/', '-', $slug), 0, 80), '-');
@@ -88,6 +113,26 @@ function product_values(array $input, bool $partial): array
     if ($has('active') || $has('isActive')) $values['is_active'] = !empty($input['active'] ?? $input['isActive']);
     if ($partial && !$values) fail(400, 'Nothing to update.');
     return $values;
+}
+
+function validate_product_promotion(array $values, array $existing = []): void
+{
+    $price = (int)($values['price'] ?? $existing['price'] ?? 0);
+    $mrp = array_key_exists('mrp', $values) ? $values['mrp'] : ($existing['mrp'] ?? null);
+    $promotionPrice = array_key_exists('promotion_price', $values) ? $values['promotion_price'] : ($existing['promotion_price'] ?? null);
+    $startAt = array_key_exists('promotion_start_at', $values) ? $values['promotion_start_at'] : ($existing['promotion_start_at'] ?? null);
+    $endAt = array_key_exists('promotion_end_at', $values) ? $values['promotion_end_at'] : ($existing['promotion_end_at'] ?? null);
+    if ($mrp !== null && (int)$mrp < $price) fail(400, 'MRP must be greater than or equal to the selling price.');
+    if ($promotionPrice === null) {
+        if ($startAt !== null || $endAt !== null) fail(400, 'Set a promotion price before setting its dates.');
+        return;
+    }
+    if ((int)$promotionPrice >= $price || ($mrp !== null && (int)$promotionPrice > (int)$mrp)) {
+        fail(400, 'Promotion price must be below the selling price and no greater than MRP.');
+    }
+    if ($startAt === null || $endAt === null || $startAt >= $endAt) {
+        fail(400, 'A promotion needs a valid start and end time.');
+    }
 }
 
 function collaborator_values(array $input, bool $partial): array
@@ -248,6 +293,21 @@ function order_status_whatsapp_text(array $details, string $status): string
         . "\n\n— 3D Print Co.";
 }
 
+function whatsapp_lead_counts(): array
+{
+    $row = one(
+        'SELECT SUM(status="new" AND is_business_enquiry=1) AS new_count, '
+            . 'SUM(' . whatsapp_overdue_sql('whatsapp_leads') . ') AS overdue_count, '
+            . 'SUM((status="new" AND is_business_enquiry=1) OR ' . whatsapp_overdue_sql('whatsapp_leads') . ') AS attention_count '
+            . 'FROM whatsapp_leads',
+    ) ?? [];
+    return [
+        'newCount' => (int)($row['new_count'] ?? 0),
+        'overdueCount' => (int)($row['overdue_count'] ?? 0),
+        'attentionCount' => (int)($row['attention_count'] ?? 0),
+    ];
+}
+
 function handle_admin(string $path, array $parts): bool
 {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -299,8 +359,7 @@ function handle_admin(string $path, array $parts): bool
     if ($path === 'admin/products' && $method === 'POST') {
         $input = body();
         $values = product_values($input, false);
-        $price = (int)$values['price'];
-        if (($values['mrp'] ?? null) !== null && (int)$values['mrp'] < $price) fail(400, 'MRP must be greater than or equal to the selling price.');
+        validate_product_promotion($values);
         $base = $values['slug'] ?? strtolower(trim((string)preg_replace('/[^a-z0-9]+/i', '-', $values['name']), '-'));
         $slug = substr($base, 0, 80);
         for ($i = 1; one('SELECT id FROM products WHERE slug=?', [$slug]); $i++) {
@@ -310,6 +369,7 @@ function handle_admin(string $path, array $parts): bool
         $row = array_merge([
             'id' => new_id(), 'slug' => $slug, 'name' => '', 'description' => '',
             'price' => 0, 'mrp' => null, 'category' => 'Uncategorised', 'stock_quantity' => 0,
+            'promotion_price' => null, 'promotion_start_at' => null, 'promotion_end_at' => null,
             'images' => '[]', 'video_url' => null, 'specifications' => '{}',
             'material' => '', 'dimensions' => '', 'print_time' => '', 'badge' => null,
             'variant' => 'lattice', 'accent' => '#a78bfa', 'model_url' => null,
@@ -329,9 +389,7 @@ function handle_admin(string $path, array $parts): bool
         }
         if ($method === 'PATCH') {
             $values = product_values(body(), true);
-            $price = (int)($values['price'] ?? $existing['price']);
-            $mrp = array_key_exists('mrp', $values) ? $values['mrp'] : $existing['mrp'];
-            if ($mrp !== null && (int)$mrp < $price) fail(400, 'MRP must be greater than or equal to the selling price.');
+            validate_product_promotion($values, $existing);
             save_fields('products', 'id', $id, $values);
             respond(200, ['product' => product_out(one('SELECT * FROM products WHERE id=?', [$id]))]);
         }
@@ -355,15 +413,16 @@ function handle_admin(string $path, array $parts): bool
     if ($path === 'admin/leads' && $method === 'GET') {
         $leads = all(
             'SELECT l.id, l.chat_id, l.phone_e164, l.contact_name, l.last_message, l.last_message_at, l.status, l.is_business_enquiry, '
-                . 'l.is_existing_customer, l.enquiry_interest, l.details_requested_at, l.created_at, l.updated_at, '
+                . 'l.is_existing_customer, l.enquiry_interest, l.details_requested_at, l.auto_followup_due_at, '
+                . 'l.auto_followup_sent_at, l.last_admin_reply_at, l.created_at, l.updated_at, '
+                . '(SELECT MAX(m.created_at) FROM whatsapp_messages m WHERE m.lead_id=l.id AND m.direction="inbound") AS last_inbound_at, '
                 . 'c.customer_code AS linked_customer_code, c.full_name AS linked_customer_name, c.email AS linked_customer_email, '
                 . 'c.phone AS linked_customer_phone, c.delivery_address AS linked_customer_address, c.city AS linked_customer_city, '
                 . 'c.state AS linked_customer_state, c.postal_code AS linked_customer_postal_code, c.marketing_opt_in AS linked_marketing_opt_in '
                 . 'FROM whatsapp_leads l LEFT JOIN customers c ON c.id=l.customer_id '
                 . 'ORDER BY FIELD(l.status,"new","active","closed"), l.updated_at DESC LIMIT 500',
         );
-        $count = one('SELECT COUNT(*) AS new_count FROM whatsapp_leads WHERE status="new" AND is_business_enquiry=1');
-        $newCount = (int)($count['new_count'] ?? 0);
+        $counts = whatsapp_lead_counts();
         respond(200, [
             'leads' => array_map(static fn(array $lead): array => [
                 'id' => $lead['id'],
@@ -377,6 +436,11 @@ function handle_admin(string $path, array $parts): bool
                 'isExistingCustomer' => (bool)$lead['is_existing_customer'],
                 'enquiryInterest' => $lead['enquiry_interest'] ?? '',
                 'detailsRequestedAt' => $lead['details_requested_at'],
+                'autoFollowupDueAt' => $lead['auto_followup_due_at'],
+                'autoFollowupSentAt' => $lead['auto_followup_sent_at'],
+                'lastAdminReplyAt' => $lead['last_admin_reply_at'],
+                'lastInboundAt' => utc_iso($lead['last_inbound_at'] ?? $lead['last_message_at']),
+                'awaitingAdminSince' => utc_iso(whatsapp_awaiting_admin_since($lead, $lead['last_inbound_at'] ?? null)),
                 'createdAt' => $lead['created_at'],
                 'updatedAt' => $lead['updated_at'],
                 'chatUrl' => $lead['phone_e164'] ? 'https://wa.me/' . $lead['phone_e164'] : '',
@@ -392,12 +456,12 @@ function handle_admin(string $path, array $parts): bool
                     'marketingOptIn' => (bool)$lead['linked_marketing_opt_in'],
                 ] : null,
             ], $leads),
-            'newCount' => $newCount,
+            'newCount' => $counts['newCount'],
+            'overdueCount' => $counts['overdueCount'],
         ]);
     }
     if ($path === 'admin/leads/count' && $method === 'GET') {
-        $count = one('SELECT COUNT(*) AS new_count FROM whatsapp_leads WHERE status="new" AND is_business_enquiry=1');
-        respond(200, ['newCount' => (int)($count['new_count'] ?? 0)]);
+        respond(200, whatsapp_lead_counts());
     }
     if ($path === 'admin/whatsapp/messages' && $method === 'GET') {
         $chatId = text_value($_GET['chatId'] ?? '', 120);
@@ -436,6 +500,7 @@ function handle_admin(string $path, array $parts): bool
         $lead = one(
             'SELECT l.id, l.chat_id, l.phone_e164, l.contact_name, l.last_message, l.last_message_at, l.status, l.is_business_enquiry, '
                 . 'l.is_existing_customer, l.enquiry_interest, l.details_requested_at, l.created_at, l.updated_at, '
+                . '(SELECT MAX(m.created_at) FROM whatsapp_messages m WHERE m.lead_id=l.id AND m.direction="inbound") AS last_inbound_at, '
                 . 'c.customer_code AS linked_customer_code, c.full_name AS linked_customer_name, c.email AS linked_customer_email, '
                 . 'c.phone AS linked_customer_phone, c.delivery_address AS linked_customer_address, c.city AS linked_customer_city, '
                 . 'c.state AS linked_customer_state, c.postal_code AS linked_customer_postal_code, c.marketing_opt_in AS linked_marketing_opt_in '
@@ -450,6 +515,8 @@ function handle_admin(string $path, array $parts): bool
             'isExistingCustomer' => (bool)$lead['is_existing_customer'],
             'enquiryInterest' => $lead['enquiry_interest'] ?? '',
             'detailsRequestedAt' => $lead['details_requested_at'],
+            'lastInboundAt' => utc_iso($lead['last_inbound_at'] ?? $lead['last_message_at']),
+            'awaitingAdminSince' => utc_iso(whatsapp_awaiting_admin_since($lead, $lead['last_inbound_at'] ?? null)),
             'updatedAt' => $lead['updated_at'], 'chatUrl' => $lead['phone_e164'] ? 'https://wa.me/' . $lead['phone_e164'] : '',
             'customer' => $lead['linked_customer_code'] ? [
                 'customerCode' => $lead['linked_customer_code'], 'name' => $lead['linked_customer_name'],
@@ -648,14 +715,17 @@ function handle_admin(string $path, array $parts): bool
             . '(SELECT COUNT(*) FROM orders WHERE payment_status="paid") AS paid_orders, '
             . '(SELECT COALESCE(SUM(total_amount),0) FROM orders WHERE payment_status="paid") AS revenue'
         );
+        // Timestamps are stored in UTC; every reported day and hour is IST.
+        $ist = 'CONVERT_TZ(created_at, "+00:00", "+05:30")';
         $daily = all(
-            'SELECT DATE(created_at) AS day,COUNT(*) AS orders FROM orders WHERE payment_status="paid" '
-            . 'AND created_at>=UTC_DATE()-INTERVAL 29 DAY GROUP BY DATE(created_at) ORDER BY day'
+            'SELECT DATE(' . $ist . ') AS day,COUNT(*) AS orders FROM orders WHERE payment_status="paid" '
+            . 'AND created_at>=UTC_TIMESTAMP()-INTERVAL 30 DAY GROUP BY DATE(' . $ist . ') ORDER BY day'
         );
+        $istEnquiry = 'CONVERT_TZ(business_enquiry_at, "+00:00", "+05:30")';
         $heat = all(
-            'SELECT DAYOFWEEK(business_enquiry_at)-1 AS weekday,HOUR(business_enquiry_at) AS hour,COUNT(*) AS count '
+            'SELECT DAYOFWEEK(' . $istEnquiry . ')-1 AS weekday,HOUR(' . $istEnquiry . ') AS hour,COUNT(*) AS count '
             . 'FROM whatsapp_leads WHERE is_business_enquiry=1 AND is_existing_customer=0 AND business_enquiry_at>=UTC_TIMESTAMP()-INTERVAL 90 DAY '
-            . 'GROUP BY DAYOFWEEK(business_enquiry_at),HOUR(business_enquiry_at)'
+            . 'GROUP BY DAYOFWEEK(' . $istEnquiry . '),HOUR(' . $istEnquiry . ')'
         );
         $products = all(
             'SELECT p.id,p.name,COALESCE(SUM(IF(o.payment_status="paid",i.quantity,0)),0) AS units,'

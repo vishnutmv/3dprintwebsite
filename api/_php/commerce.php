@@ -160,13 +160,16 @@ function paid_order_whatsapp_text(array $details, string $paymentId): string
 
 function send_paid_order_whatsapp(array $details, string $paymentId): void
 {
-    if (!empty($details['customer']['phone'])) {
-        send_whatsapp_notification(
-            (string)$details['customer']['phone'],
-            (string)($details['customer']['full_name'] ?? ''),
-            paid_order_whatsapp_text($details, $paymentId),
-        );
+    if (empty($details['customer']['phone'])) return;
+    $customer = $details['customer'];
+    $message = paid_order_whatsapp_text($details, $paymentId);
+    $chatId = whatsapp_chat_id_from_phone((string)$customer['phone']);
+    $firstImage = $details['items'][0]['image_url'] ?? null;
+    if (is_string($firstImage) && str_starts_with(strtolower($firstImage), 'https://')) {
+        if (send_whatsapp_media_url($chatId, $firstImage, $message)) return;
+        error_log('[interserver-api] WhatsApp order image could not be sent; using the text confirmation.');
     }
+    send_whatsapp_notification((string)$customer['phone'], (string)($customer['full_name'] ?? ''), $message);
 }
 
 function reveal_reward(string $token, bool $reveal): array
@@ -204,10 +207,174 @@ function reveal_reward(string $token, bool $reveal): array
     ];
 }
 
+function customer_session_required(): array
+{
+    $customerId = (string)($_SESSION['customer_id'] ?? '');
+    $expiresAt = (int)($_SESSION['customer_expires_at'] ?? 0);
+    if ($customerId === '' || $expiresAt < time()) {
+        unset($_SESSION['customer_id'], $_SESSION['customer_expires_at']);
+        fail(401, 'Sign in with your WhatsApp number to view your profile.');
+    }
+    $customer = one('SELECT * FROM customers WHERE id=?', [$customerId]);
+    if (!$customer) {
+        unset($_SESSION['customer_id'], $_SESSION['customer_expires_at']);
+        fail(401, 'Sign in with your WhatsApp number to view your profile.');
+    }
+    return $customer;
+}
+
+function find_customer_for_login(string $phone): ?array
+{
+    $match = find_customer_by_phone($phone);
+    return $match ? one('SELECT * FROM customers WHERE id=?', [$match['id']]) : null;
+}
+
+function customer_orders_response(array $customer): array
+{
+    $orders = all('SELECT * FROM orders WHERE customer_id=? ORDER BY created_at DESC LIMIT 100', [$customer['id']]);
+    return [
+        'customer' => [
+            'code' => $customer['customer_code'],
+            'name' => $customer['full_name'],
+            'email' => $customer['email'],
+            'phone' => $customer['phone'],
+            'city' => $customer['city'],
+            'state' => $customer['state'],
+            'postalCode' => $customer['postal_code'],
+        ],
+        'orders' => array_map(
+            static fn(array $order): array => mapped_details(order_details($order['order_number'])),
+            $orders,
+        ),
+    ];
+}
+
 function handle_commerce(string $path, array $parts): bool
 {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     global $config;
+    if ($path === 'customer/auth/request' && $method === 'POST') {
+        rate_limit('customer-otp-request', 5, 600);
+        $input = body();
+        $phone = normalize_indian_mobile(text_value($input['phone'] ?? '', 24));
+        if ($phone === null) fail(400, 'Enter the Indian mobile number used at checkout.');
+        if (empty($config['customer_otp_secret']) || empty($config['waapi_api_token']) || empty($config['waapi_instance_id'])) {
+            fail(503, 'WhatsApp sign-in is not configured. Please contact the store.');
+        }
+        $customer = find_customer_for_login($phone);
+        if (!$customer) respond(200, ['message' => 'If an account exists for this number, a sign-in code has been sent.']);
+
+        $otp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $nowSql = $now->format('Y-m-d H:i:s');
+        $expiresAt = $now->modify('+5 minutes');
+        $expiresSql = $expiresAt->format('Y-m-d H:i:s');
+        $hash = hash_hmac(
+            'sha256',
+            $otp . '|' . $customer['id'] . '|' . $expiresSql,
+            (string)$config['customer_otp_secret'],
+        );
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            run(
+                'INSERT IGNORE INTO customer_otp_challenges '
+                    . '(customer_id, otp_hash, expires_at, attempts, request_count, window_started_at, last_sent_at) '
+                    . 'VALUES (?, ?, ?, 0, 0, ?, ?)',
+                [$customer['id'], hash('sha256', random_bytes(32)), '1970-01-01 00:00:00', $nowSql, '1970-01-01 00:00:00'],
+            );
+            $challenge = one('SELECT * FROM customer_otp_challenges WHERE customer_id=? FOR UPDATE', [$customer['id']]);
+            if (!$challenge) throw new RuntimeException('Customer OTP challenge could not be initialized.');
+            $windowStarted = new DateTimeImmutable((string)$challenge['window_started_at'], new DateTimeZone('UTC'));
+            $windowExpired = $now->getTimestamp() - $windowStarted->getTimestamp() >= 3600;
+            $recentSend = $now->getTimestamp() - (new DateTimeImmutable((string)$challenge['last_sent_at'], new DateTimeZone('UTC')))->getTimestamp() < 60;
+            if ($recentSend || (!$windowExpired && (int)$challenge['request_count'] >= 5)) {
+                $pdo->commit();
+                respond(200, ['message' => 'If an account exists for this number, a sign-in code has been sent.']);
+            }
+            run(
+                'UPDATE customer_otp_challenges SET otp_hash=?, expires_at=?, attempts=0, '
+                    . 'request_count=?, window_started_at=?, last_sent_at=?, verified_at=NULL WHERE customer_id=?',
+                [
+                    $hash,
+                    $expiresSql,
+                    $windowExpired ? 1 : (int)$challenge['request_count'] + 1,
+                    $windowExpired ? $nowSql : $challenge['window_started_at'],
+                    $nowSql,
+                    $customer['id'],
+                ],
+            );
+            $pdo->commit();
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
+        }
+
+        $sent = send_whatsapp_text(
+            $phone . '@c.us',
+            'Your 3D Print Co. sign-in code is ' . $otp . ". It expires in 5 minutes. Never share it.",
+        );
+        if (!$sent) {
+            run(
+                'UPDATE customer_otp_challenges SET expires_at=UTC_TIMESTAMP(), otp_hash=? WHERE customer_id=?',
+                [hash('sha256', random_bytes(32)), $customer['id']],
+            );
+            fail(502, 'WhatsApp could not deliver your sign-in code. Please try again later.');
+        }
+        respond(200, ['message' => 'If an account exists for this number, a sign-in code has been sent.']);
+    }
+    if ($path === 'customer/auth/verify' && $method === 'POST') {
+        rate_limit('customer-otp-verify', 10, 600);
+        $input = body();
+        $phone = normalize_indian_mobile(text_value($input['phone'] ?? '', 24));
+        $otp = text_value($input['code'] ?? '', 6);
+        if ($phone === null || !preg_match('/^\d{6}$/', $otp)) fail(400, 'The code is invalid or expired.');
+        $customer = find_customer_for_login($phone);
+        if (!$customer) fail(400, 'The code is invalid or expired.');
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            $challenge = one('SELECT * FROM customer_otp_challenges WHERE customer_id=? FOR UPDATE', [$customer['id']]);
+            if (
+                !$challenge
+                || (int)$challenge['attempts'] >= 5
+                || new DateTimeImmutable((string)$challenge['expires_at'], new DateTimeZone('UTC')) <= new DateTimeImmutable('now', new DateTimeZone('UTC'))
+                || $challenge['verified_at'] !== null
+            ) {
+                $pdo->commit();
+                fail(400, 'The code is invalid or expired.');
+            }
+            $expected = hash_hmac(
+                'sha256',
+                $otp . '|' . $customer['id'] . '|' . $challenge['expires_at'],
+                (string)($config['customer_otp_secret'] ?? ''),
+            );
+            if (!hash_equals((string)$challenge['otp_hash'], $expected)) {
+                run('UPDATE customer_otp_challenges SET attempts=attempts+1 WHERE customer_id=?', [$customer['id']]);
+                $pdo->commit();
+                fail(400, 'The code is invalid or expired.');
+            }
+            run(
+                'UPDATE customer_otp_challenges SET verified_at=UTC_TIMESTAMP(), otp_hash=? WHERE customer_id=?',
+                [hash('sha256', random_bytes(32)), $customer['id']],
+            );
+            $pdo->commit();
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
+        }
+        session_regenerate_id(true);
+        $_SESSION['customer_id'] = $customer['id'];
+        $_SESSION['customer_expires_at'] = time() + 28800;
+        respond(200, customer_orders_response($customer));
+    }
+    if ($path === 'customer/session' && $method === 'GET') {
+        respond(200, customer_orders_response(customer_session_required()));
+    }
+    if ($path === 'customer/logout' && $method === 'POST') {
+        unset($_SESSION['customer_id'], $_SESSION['customer_expires_at']);
+        respond(200, ['ok' => true]);
+    }
     if ($path === 'products' && $method === 'GET') {
         $sql = 'SELECT p.*, '
             . '(SELECT COALESCE(SUM(i.quantity),0) FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.product_id=p.id AND o.payment_status="paid") AS sold_count, '
@@ -270,17 +437,18 @@ function handle_commerce(string $path, array $parts): bool
         if (!is_array($contact)) fail(400, 'Delivery details are missing.');
         $name = text_value($contact['name'] ?? '', 120);
         $email = strtolower(text_value($contact['email'] ?? '', 254));
-        $phone = text_value($contact['phone'] ?? '', 24);
-        $digits = preg_replace('/\D/', '', $phone);
+        $phone = normalize_indian_mobile(text_value($contact['phone'] ?? '', 24));
         $address = text_value($contact['address'] ?? '', 500);
         $city = text_value($contact['city'] ?? '', 100);
         $state = text_value($contact['state'] ?? '', 100);
         $pin = text_value($contact['postalCode'] ?? $contact['pin'] ?? '', 10);
         if (mb_strlen($name) < 2) fail(400, 'Please enter your full name.');
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail(400, 'Please enter a valid email address.');
-        if (strlen((string)$digits) < 10 || strlen((string)$digits) > 15) fail(400, 'Please enter a valid phone number with 10–15 digits.');
-        if (mb_strlen($address) < 5 || mb_strlen($city) < 2 || mb_strlen($state) < 2) fail(400, 'Please complete your delivery address.');
-        if (!preg_match('/^\d{4,6}$/', $pin)) fail(400, 'Please enter a valid PIN / postal code.');
+        if ($phone === null) fail(400, 'Please enter a valid Indian mobile number.');
+        if (mb_strlen($address) < 5 || !in_array($city, tamil_nadu_districts(), true) || $state !== 'Tamil Nadu') {
+            fail(400, 'Delivery is currently available only to Tamil Nadu districts.');
+        }
+        if (!preg_match('/^6\d{5}$/', $pin)) fail(400, 'Please enter a valid 6-digit Tamil Nadu PIN code.');
         $rawItems = $body['items'] ?? null;
         if (!is_array($rawItems) || count($rawItems) === 0 || count($rawItems) > 50) fail(400, 'Your cart is empty or contains too many products.');
         $merged = [];
@@ -299,14 +467,25 @@ function handle_commerce(string $path, array $parts): bool
             if (!$product) fail(409, 'One of the products is no longer available.');
             if ((int)$product['stock_quantity'] < $qty) fail(409, 'Only ' . (int)$product['stock_quantity'] . ' of ' . $product['name'] . ' left in stock.');
             $products[] = [$product, $qty];
-            $subtotal += (int)$product['price'] * $qty;
+            $subtotal += active_product_price($product) * $qty;
         }
         $settings = store_settings();
         $shipping = $subtotal >= $settings['freeShippingOver'] ? 0 : max(0, $settings['shippingFlat']);
         $total = $subtotal + $shipping;
         if ($total <= 0) fail(400, 'Order total is invalid.');
+        if (array_key_exists('expectedTotal', $body) && $body['expectedTotal'] !== null) {
+            $expectedTotal = filter_var($body['expectedTotal'], FILTER_VALIDATE_INT);
+            if ($expectedTotal === false || $expectedTotal !== $total) {
+                fail(409, 'Prices or shipping changed while you were checking out. Review your cart and try again. Nothing was charged.');
+            }
+        }
 
-        $existing = one('SELECT * FROM customers WHERE email=? OR phone=? LIMIT 1', [$email, $phone]);
+        // The phone number is the account identity used by WhatsApp sign-in, so
+        // match it first. Never merge two separate customer records that merely
+        // share an email address.
+        $byPhone = one('SELECT * FROM customers WHERE phone=? LIMIT 1', [$phone]);
+        $byEmail = $byPhone === null ? one('SELECT * FROM customers WHERE email=? ORDER BY updated_at DESC LIMIT 1', [$email]) : null;
+        $existing = $byPhone ?? $byEmail;
         if ($existing) {
             $customerId = $existing['id'];
             run('UPDATE customers SET full_name=?,email=?,phone=?,delivery_address=?,city=?,state=?,postal_code=?,marketing_opt_in=? WHERE id=?', [
@@ -316,7 +495,7 @@ function handle_commerce(string $path, array $parts): bool
         } else {
             $customerId = new_id();
             do {
-                $customerCode = '3DP-' . strtoupper(bin2hex(random_bytes(2))) . '-' . strtoupper(bin2hex(random_bytes(2)));
+                $customerCode = customer_code();
             } while (one('SELECT id FROM customers WHERE customer_code=?', [$customerCode]));
             run('INSERT INTO customers (id,customer_code,full_name,email,phone,delivery_address,city,state,postal_code,marketing_opt_in) VALUES (?,?,?,?,?,?,?,?,?,?)', [
                 $customerId, $customerCode, $name, $email, $phone, $address, $city, $state, $pin,
@@ -331,7 +510,7 @@ function handle_commerce(string $path, array $parts): bool
         );
         $orderId = new_id();
         do {
-            $orderNumber = 'ORD-' . strtoupper(bin2hex(random_bytes(4)));
+            $orderNumber = order_number();
         } while (one('SELECT id FROM orders WHERE order_number=?', [$orderNumber]));
         db()->beginTransaction();
         try {
@@ -340,9 +519,10 @@ function handle_commerce(string $path, array $parts): bool
             ]);
             foreach ($products as [$product, $qty]) {
                 $images = json_array($product['images']);
+                $unitPrice = active_product_price($product);
                 run('INSERT INTO order_items (id,order_id,product_id,product_name,quantity,unit_price,total_price,image_url,model_url) VALUES (?,?,?,?,?,?,?,?,?)', [
-                    new_id(), $orderId, $product['id'], $product['name'], $qty, $product['price'],
-                    (int)$product['price'] * $qty, $images[0] ?? null, $product['model_url'],
+                    new_id(), $orderId, $product['id'], $product['name'], $qty, $unitPrice,
+                    $unitPrice * $qty, $images[0] ?? null, $product['model_url'],
                 ]);
             }
             db()->commit();
@@ -350,8 +530,6 @@ function handle_commerce(string $path, array $parts): bool
             if (db()->inTransaction()) db()->rollBack();
             throw $e;
         }
-        $order = one('SELECT * FROM orders WHERE id=?', [$orderId]);
-        $session = make_session($order);
         $details = order_details($orderNumber);
         notify_event(
             $email,
@@ -360,7 +538,10 @@ function handle_commerce(string $path, array $parts): bool
             "Thanks for your order.\n\nOrder: $orderNumber\nCustomer ID: {$customer['customer_code']}\nTotal: ₹" . number_format($total / 100, 2) . "\n\nWe will email you again as soon as Razorpay confirms the payment.\n— 3D Print Co.",
             ['orderNumber' => $orderNumber]
         );
-        respond(201, ['order' => mapped_details($details), 'session' => $session]);
+        // The order is saved before any payment gateway call. The browser opens
+        // Razorpay separately through payments/create-order, so a gateway hiccup
+        // never leaves a paid-for order without a confirmation page.
+        respond(201, ['order' => mapped_details($details)]);
     }
 
     if (($parts[0] ?? '') === 'orders' && count($parts) === 2 && $method === 'GET') {
@@ -378,7 +559,7 @@ function handle_commerce(string $path, array $parts): bool
         $number = text_value($input['orderNumber'] ?? '', 32);
         $code = strtoupper(text_value($input['customerCode'] ?? '', 32));
         $pdf = base64_decode((string)($input['pdfBase64'] ?? ''), true);
-        if (!preg_match('/^ORD-[A-Z0-9]{8}$/', $number) || !preg_match('/^3DP-[A-Z0-9]{4}-[A-Z0-9]{4}$/', $code)) {
+        if (!valid_order_number($number) || !valid_customer_code($code)) {
             fail(400, 'A valid order number and customer code are required.');
         }
         if (!is_string($pdf) || strlen($pdf) > 2 * 1024 * 1024 || !str_starts_with($pdf, '%PDF-')) {
@@ -418,19 +599,42 @@ function handle_commerce(string $path, array $parts): bool
         respond(200, ['sent' => true, 'alreadySent' => false]);
     }
 
+    if ($path === 'invoices/whatsapp' && $method === 'POST') {
+        rate_limit('invoice-whatsapp', 5, 300);
+        $input = body();
+        $number = strtoupper(text_value($input['orderNumber'] ?? '', 32));
+        $code = strtoupper(text_value($input['customerCode'] ?? '', 32));
+        $pdf = base64_decode((string)($input['pdfBase64'] ?? ''), true);
+        if (!valid_order_number($number) || !valid_customer_code($code)) {
+            fail(400, 'A valid order number and customer code are required.');
+        }
+        if (!is_string($pdf) || strlen($pdf) > 2 * 1024 * 1024 || !str_starts_with($pdf, '%PDF-')) {
+            fail(400, 'A valid invoice PDF under 2 MB is required.');
+        }
+        $details = order_details($number);
+        if (!$details || strtoupper((string)($details['customer']['customer_code'] ?? '')) !== $code) fail(404, 'Order not found.');
+        if ($details['order']['payment_status'] !== 'paid') fail(409, 'An invoice is available only after payment is verified.');
+        if (!empty($details['order']['whatsapp_invoice_sent_at'])) respond(200, ['sent' => true, 'alreadySent' => true]);
+        $phone = (string)($details['customer']['phone'] ?? '');
+        if ($phone === '') fail(409, 'This order does not have a WhatsApp number.');
+        $caption = 'Payment confirmed for order ' . $number . ". Your invoice is attached.\n— 3D Print Co.";
+        if (!send_whatsapp_media(
+            whatsapp_chat_id_from_phone($phone),
+            base64_encode($pdf),
+            'invoice-' . $number . '.pdf',
+            $caption,
+        )) {
+            fail(502, 'The WhatsApp invoice could not be sent. Please retry or download the PDF.');
+        }
+        run('UPDATE orders SET whatsapp_invoice_sent_at=UTC_TIMESTAMP() WHERE id=? AND whatsapp_invoice_sent_at IS NULL', [$details['order']['id']]);
+        respond(200, ['sent' => true, 'alreadySent' => false]);
+    }
+
     if (($parts[0] ?? '') === 'customers' && count($parts) === 3 && $parts[2] === 'orders' && $method === 'GET') {
         rate_limit('customer-orders', 30, 60);
-        $code = strtoupper($parts[1]);
-        if (!preg_match('/^3DP-[A-Z0-9]{4}-[A-Z0-9]{4}$/', $code)) fail(404, 'Customer not found.');
-        $customer = one('SELECT * FROM customers WHERE customer_code=?', [$code]);
-        if (!$customer) fail(404, 'Customer not found.');
-        $orders = all('SELECT * FROM orders WHERE customer_id=? ORDER BY created_at DESC LIMIT 100', [$customer['id']]);
-        $mapped = [];
-        foreach ($orders as $order) $mapped[] = mapped_details(order_details($order['order_number']));
-        respond(200, ['customer' => [
-            'code' => $customer['customer_code'], 'name' => $customer['full_name'],
-            'email' => $customer['email'], 'phone' => $customer['phone'],
-        ], 'orders' => $mapped]);
+        $customer = customer_session_required();
+        if (strtoupper($customer['customer_code']) !== strtoupper($parts[1])) fail(404, 'Customer not found.');
+        respond(200, customer_orders_response($customer));
     }
 
     if ($path === 'payments/create-order' && $method === 'POST') {
@@ -438,7 +642,7 @@ function handle_commerce(string $path, array $parts): bool
         $payload = body();
         $number = text_value($payload['orderNumber'] ?? $payload['orderId'] ?? '', 32);
         $code = strtoupper(text_value($payload['customerCode'] ?? '', 32));
-        if (!preg_match('/^ORD-[A-Z0-9]{8}$/', $number) || !preg_match('/^3DP-[A-Z0-9]{4}-[A-Z0-9]{4}$/', $code)) fail(400, 'A valid order number and customer code are required.');
+        if (!valid_order_number($number) || !valid_customer_code($code)) fail(400, 'A valid order number and customer code are required.');
         $order = one('SELECT * FROM orders WHERE order_number=?', [$number]);
         if (!$order) fail(404, 'Order not found.');
         respond(200, ['session' => make_session($order, $code)]);

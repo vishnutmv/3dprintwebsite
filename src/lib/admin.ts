@@ -42,6 +42,13 @@ export type AdminLead = {
   isExistingCustomer: boolean;
   enquiryInterest: string;
   detailsRequestedAt: string | null;
+  autoFollowupDueAt: string | null;
+  autoFollowupSentAt: string | null;
+  lastAdminReplyAt: string | null;
+  /** Time of the customer's latest inbound message (UTC ISO). */
+  lastInboundAt: string | null;
+  /** Set while no admin has replied since that message; null when answered. */
+  awaitingAdminSince: string | null;
   createdAt: string;
   updatedAt: string;
   chatUrl: string;
@@ -174,6 +181,9 @@ export type ProductInput = {
   category?: string;
   price?: number;
   mrp?: number | null;
+  promotionPrice?: number | null;
+  promotionStartAt?: string | null;
+  promotionEndAt?: string | null;
   stock?: number;
   images?: string[];
   videoUrl?: string | null;
@@ -366,13 +376,12 @@ export function getCustomer(code: string): Promise<{ customer: AdminCustomer; or
 
 /* ------------------------------- Leads ---------------------------- */
 
-export async function getLeads(): Promise<{ leads: AdminLead[]; newCount: number }> {
+export async function getLeads(): Promise<{ leads: AdminLead[]; newCount: number; overdueCount: number }> {
   return adminGet("/api/admin/leads");
 }
 
-export async function getNewLeadCount(): Promise<number> {
-  const response = await adminGet<{ newCount: number }>("/api/admin/leads/count");
-  return response.newCount;
+export async function getLeadCounts(): Promise<{ newCount: number; overdueCount: number; attentionCount: number }> {
+  return adminGet("/api/admin/leads/count");
 }
 
 export async function updateLeadStatus(id: string, status: AdminLead["status"]): Promise<AdminLead> {

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { ModelViewer } from "@/components/ModelViewer";
 import { inr } from "@/lib/format";
+import { fromISTDateTimeInput, toISTDateTimeInput } from "@/lib/promotions";
 import { demoMode } from "@/lib/demo-mode";
 import { useToast } from "@/lib/toast";
 import {
@@ -38,6 +39,9 @@ type FormState = {
   category: string;
   priceRupees: string;
   mrpRupees: string;
+  promotionPriceRupees: string;
+  promotionStartAt: string;
+  promotionEndAt: string;
   stock: string;
   description: string;
   material: string;
@@ -56,6 +60,9 @@ const blank: FormState = {
   category: "Miniatures",
   priceRupees: "",
   mrpRupees: "",
+  promotionPriceRupees: "",
+  promotionStartAt: "",
+  promotionEndAt: "",
   stock: "10",
   description: "",
   material: "PLA+ matte",
@@ -73,6 +80,9 @@ function toForm(product: AdminProduct): FormState {
     category: product.category,
     priceRupees: String(product.price / 100),
     mrpRupees: product.mrp ? String(product.mrp / 100) : "",
+    promotionPriceRupees: product.promotionPrice ? String(product.promotionPrice / 100) : "",
+    promotionStartAt: toISTDateTimeInput(product.promotionStartAt),
+    promotionEndAt: toISTDateTimeInput(product.promotionEndAt),
     stock: String(product.stock),
     description: product.description,
     material: product.material,
@@ -142,12 +152,32 @@ export function AdminProducts() {
       toast("MRP must be at least the selling price", "warn");
       return;
     }
+    const promotionPrice = form.promotionPriceRupees
+      ? Math.round(Number(form.promotionPriceRupees) * 100)
+      : null;
+    if (promotionPrice !== null && (!Number.isFinite(promotionPrice) || promotionPrice < 1 || promotionPrice >= price)) {
+      toast("Promotion price must be positive and below the selling price", "warn");
+      return;
+    }
+    if (Boolean(form.promotionStartAt) !== Boolean(form.promotionEndAt) || (promotionPrice !== null && (!form.promotionStartAt || !form.promotionEndAt))) {
+      toast("Enter both promotion dates and times, or clear the promotion", "warn");
+      return;
+    }
+    const promotionStartAt = fromISTDateTimeInput(form.promotionStartAt);
+    const promotionEndAt = fromISTDateTimeInput(form.promotionEndAt);
+    if (promotionStartAt && promotionEndAt && promotionStartAt >= promotionEndAt) {
+      toast("Promotion end must be after its start", "warn");
+      return;
+    }
 
     const payload: ProductInput = {
       name: form.name.trim(),
       category: form.category,
       price,
       mrp,
+      promotionPrice,
+      promotionStartAt,
+      promotionEndAt,
       stock: Math.max(0, Number(form.stock) || 0),
       description: form.description,
       material: form.material,
@@ -367,7 +397,10 @@ export function AdminProducts() {
                         )}
                       </div>
                     </td>
-                    <td className="num px-5 py-3 text-right text-white/80">{inr(product.price)}</td>
+                    <td className="num px-5 py-3 text-right text-white/80">
+                      {inr(product.promotionPrice ?? product.price)}
+                      {product.promotionPrice && <span className="ml-1 text-[9px] text-coral">offer set</span>}
+                    </td>
                     <td className="px-5 py-3 text-right">
                       <span className={product.stock <= 10 ? "text-sun" : "text-white/60"}>{product.stock}</span>
                     </td>
@@ -461,6 +494,22 @@ export function AdminProducts() {
                   <label className="label" htmlFor="p-mrp">MRP ₹ (optional)</label>
                   <input id="p-mrp" className="field" inputMode="decimal" value={form.mrpRupees} onChange={(event) => set("mrpRupees", event.target.value)} />
                 </div>
+
+                <div>
+                  <label className="label" htmlFor="p-promo-price">Offer price ₹ (optional)</label>
+                  <input id="p-promo-price" className="field" inputMode="decimal" value={form.promotionPriceRupees} onChange={(event) => set("promotionPriceRupees", event.target.value)} placeholder="Leave blank for no offer" />
+                </div>
+                <div>
+                  <label className="label" htmlFor="p-promo-start">Offer starts (IST)</label>
+                  <input id="p-promo-start" className="field" type="datetime-local" value={form.promotionStartAt} onChange={(event) => set("promotionStartAt", event.target.value)} />
+                </div>
+                <div>
+                  <label className="label" htmlFor="p-promo-end">Offer ends (IST)</label>
+                  <input id="p-promo-end" className="field" type="datetime-local" value={form.promotionEndAt} onChange={(event) => set("promotionEndAt", event.target.value)} />
+                </div>
+                <p className="sm:col-span-2 text-[10.5px] text-white/40">
+                  The checkout uses the offer only between these times. No countdown or discount is shown outside the configured window.
+                </p>
 
                 <div>
                   <label className="label" htmlFor="p-stock">Stock</label>

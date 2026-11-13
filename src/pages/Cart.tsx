@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { Minus, Plus, ShoppingBag, X } from "lucide-react";
 import { EmptyState } from "@/components/ui";
 import { inr } from "@/lib/format";
+import { effectiveProductPrice, usePromotionClock } from "@/lib/promotions";
 import { cartLines, useStore } from "@/lib/store";
 
 export function Cart() {
@@ -14,8 +15,9 @@ export function Cart() {
   const settings = useStore((state) => state.settings);
   const setQty = useStore((state) => state.setQty);
   const removeFromCart = useStore((state) => state.removeFromCart);
+  const now = usePromotionClock();
 
-  const lines = cartLines({ cart, products });
+  const lines = cartLines({ cart, products }, now);
   const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
   const shipping = subtotal === 0 || subtotal >= settings.freeShippingOver ? 0 : settings.shippingFlat;
   const total = subtotal + shipping;
@@ -113,7 +115,7 @@ export function Cart() {
                   </div>
                   <div className="text-right">
                     <p className="num text-[14px] font-semibold text-white">{inr(line.lineTotal)}</p>
-                    <p className="text-[10.5px] text-white/35">{inr(line.product.price)} each</p>
+                    <p className="text-[10.5px] text-white/35">{inr(effectiveProductPrice(line.product, now))} each</p>
                   </div>
                 </div>
               </div>

@@ -5,11 +5,14 @@ React, TypeScript and Vite storefront on Vercel, with a PHP 8.2 API, MariaDB and
 ## What is implemented
 
 - Product catalogue, product details, cart, checkout and order confirmation.
+- Time-boxed product offers: an optional promotion price with an IST start and end time, shown on the storefront with a live countdown. The server re-prices every order and rejects a cart whose displayed total has gone stale.
 - Server-priced orders, customer codes, order history, Razorpay signature checks, payment webhooks, and idempotent payment status updates.
+- Tamil Nadu-only delivery: checkout lists the 38 districts, locks the state, and the API rejects any other district, state or PIN code.
+- Customer accounts created by the first order, with `ddmmyyyy` + 10 character customer IDs and `ORD-ddmmyyyy-…` order numbers. Returning customers sign in with a six-digit WhatsApp code.
 - Admin login and protected PHP product, order, customer, prize, settings and media endpoints.
 - Manual prize assignment and collaborator-sponsored offers share quantity-aware inventory and a private, one-time scratch-to-reveal card. Revealing downloads a PDF; customers can explicitly share it from a supported device/browser.
 - WhatsApp enquiries match compact and spaced 3D Print Co. mentions, capture follow-up details, link known customer numbers, and exclude existing customers from cold-lead conversion metrics. Automated answers use a fixed product catalogue reply or the shop link; no AI provider is configured.
-- Consent-based, text-only WhatsApp campaigns in admin batches; order and lead conversion insights; computed paid-product trend tags; and payment-confirmed PDF invoice emails/downloads.
+- Consent-based, text-only WhatsApp campaigns in admin batches; order and lead conversion insights; computed paid-product trend tags; and payment-confirmed PDF invoices by email and WhatsApp.
 - Optional marketing consent collected at checkout and stored on the customer record. A customer can reply `STOP` to disable future campaigns for their matched customer phone.
 - MariaDB stores business records. PHP sessions protect admin routes; media files are stored under `uploads/`.
 
@@ -67,6 +70,7 @@ The public hostname `https://st89310.ispot.cc` responds over HTTPS, but `/api/se
 
 1. In DirectAdmin, import `database/interserver.sql` into the MariaDB database. The schema has no sample products, prizes or customer records.
    For an existing installation, do not re-import the full schema or blindly rerun older migrations. Back up the database, inspect `SHOW COLUMNS FROM prizes`, `SHOW COLUMNS FROM whatsapp_leads`, `SHOW INDEX FROM whatsapp_leads`, and verify whether the collaborator tables are already complete. Apply `migrations/0014_collaborator_gifts_and_enquiry_details.sql` only once, after migrations through 0013 and only if none of its changes are already present. If phpMyAdmin reports a duplicate column, index, or table, stop and inspect the existing schema before continuing.
+   This release also needs `migrations/0015_promotions_customer_otp_ids.sql` once, after 0014. It adds the product promotion columns, widens `customers.customer_code` to `VARCHAR(18)` and `orders.order_number` to `VARCHAR(23)`, adds `orders.whatsapp_invoice_sent_at`, and creates `customer_otp_challenges`. Check `SHOW COLUMNS FROM products`, `SHOW COLUMNS FROM customers`, `SHOW COLUMNS FROM orders` and `SHOW TABLES LIKE 'customer_otp_challenges'` first; if any of it already exists, reconcile manually instead of re-running the file.
 2. Upload the PHP backend to InterServer's `public_html`: root `.htaccess`; `api/index.php`, `api/.htaccess`, `api/_php/`; and `uploads/.htaccess`. The uploads `.htaccess` allows the production Vercel origin to load GLB models cross-origin; keep its allowed origin in sync if the Vercel production URL changes. Create `api/config.php` from `api/config.example.php` and upload it alongside `api/index.php`; `api/.htaccess` must remain in place to block web access to the config. Never commit or share the config.
 3. In `api/config.php` on InterServer, set `site_url` to `https://st89310.ispot.cc`, fill in the database credentials and a strong admin email/password. After Vercel deploys, set `allowed_origins` to an array with the exact production origin, e.g. `['https://your-project.vercel.app']`. Do not use wildcard origins.
 4. In DirectAdmin's PHP settings, confirm PHP 8.2+, PDO MySQL, fileinfo, mbstring and outbound HTTPS (`allow_url_fopen`) are enabled. Set `upload_max_filesize` to at least `50M` and `post_max_size` to at least `55M`. Ensure `public_html/uploads/` is writable using the host-recommended permissions, never `777`.
@@ -90,7 +94,8 @@ The TypeScript files under `api/` and Supabase migrations are historical referen
 | `resend_api_key`, `notify_from` | Server only, optional | Resend email delivery |
 | `notify_webhook_url` | Server only, optional | Trusted notification relay you control |
 | `storefront_url` | Server only | Public HTTPS storefront used for prize reveal links |
-| `waapi_instance_id`, `waapi_api_token` | Server only, optional | WaAPI outbound customer messages and opt-in campaign sends |
+| `customer_otp_secret` | Server only | HMAC key for six-digit customer sign-in codes; at least 32 random characters |
+| `waapi_instance_id`, `waapi_api_token` | Server only, optional | WaAPI outbound customer messages, sign-in codes and opt-in campaign sends |
 
 Use a unique, strong admin password. If optional notification credentials are absent, prize/order messages are not delivered and the API reports `not_configured`. A generic webhook is only a transport hook; it is not a WhatsApp integration until connected to and tested with an authorized WhatsApp provider.
 
@@ -121,13 +126,13 @@ Do not use live payment details for demo testing.
 
 The backend can receive WaAPI `message` events and send replies through the WaAPI instance API. It tracks direct chats and saves their WhatsApp chat ID, optional phone number, profile name and message history; duplicate webhook deliveries are ignored. A response is triggered only when an incoming text includes `3dprintco`, `@3dprintco`, or `/3dprintco` followed by a query. Other incoming chats are recorded for admin visibility but do not get an automated reply or follow-up. The admin inbox defaults to **Business enquiries** and can be switched to **All chats**. Triggered enquiries receive a product-and-shop-link reply (up to three active, in-stock products and current prices); this is a fixed automatic message, not an AI-generated answer, and is limited to once per 24 hours per lead. If no admin actually replies within five minutes, one follow-up is sent; a later triggered message starts a new timer. The admin can reply from the lead inbox, orders, or customer records. Messages sent from the connected WhatsApp app are also synced when WaAPI emits their message events. Taking over suppresses the initial automatic reply, but only an actual admin message cancels the five-minute follow-up.
 
-While signed in, the admin polls for new business enquiries and shows an inbox badge and in-panel alert. To receive desktop alerts when the admin tab is in the background, select **Enable desktop alerts** in the admin panel and allow notifications in the browser. The optional email alert is separate and requires the email provider configuration below.
+While signed in, the admin polls for new business enquiries and shows an inbox badge and in-panel alert. A business enquiry flashes red once its latest customer message has had no human reply for five minutes; this is independent of the automated follow-up, so the alert stays until an admin actually messages the customer. To receive desktop alerts when the admin tab is in the background, select **Enable desktop alerts** in the admin panel and allow notifications in the browser. The optional email alert is separate and requires the email provider configuration below.
 
 WaAPI is a third-party WhatsApp Web-based provider, not Meta's official Cloud API. Review WaAPI's current billing, security, service terms and WhatsApp policies: using an unofficial automation provider can risk session interruption or restrictions on the WhatsApp number. Do not assume it is free. Campaigns are text-only and must only be sent to customers with recorded marketing consent.
 
 To connect the active WaAPI instance:
 
-1. For an existing MariaDB database, apply migrations in order, skipping any already successfully applied: [`migrations/0009_whatsapp_leads.sql`](./migrations/0009_whatsapp_leads.sql), [`migrations/0010_waapi_leads.sql`](./migrations/0010_waapi_leads.sql), [`migrations/0011_whatsapp_conversations.sql`](./migrations/0011_whatsapp_conversations.sql), [`migrations/0012_whatsapp_business_triggers.sql`](./migrations/0012_whatsapp_business_triggers.sql), then [`migrations/0013_rewards_campaigns_invoices.sql`](./migrations/0013_rewards_campaigns_invoices.sql). If phpMyAdmin reports a duplicate column, stop and inspect the existing table/columns before retrying; do not re-run the whole migration blindly. For a fresh import, `database/interserver.sql` includes the current schema.
+1. For an existing MariaDB database, apply migrations in order, skipping any already successfully applied: [`migrations/0009_whatsapp_leads.sql`](./migrations/0009_whatsapp_leads.sql), [`migrations/0010_waapi_leads.sql`](./migrations/0010_waapi_leads.sql), [`migrations/0011_whatsapp_conversations.sql`](./migrations/0011_whatsapp_conversations.sql), [`migrations/0012_whatsapp_business_triggers.sql`](./migrations/0012_whatsapp_business_triggers.sql), [`migrations/0013_rewards_campaigns_invoices.sql`](./migrations/0013_rewards_campaigns_invoices.sql), [`migrations/0014_collaborator_gifts_and_enquiry_details.sql`](./migrations/0014_collaborator_gifts_and_enquiry_details.sql), then [`migrations/0015_promotions_customer_otp_ids.sql`](./migrations/0015_promotions_customer_otp_ids.sql). If phpMyAdmin reports a duplicate column, stop and inspect the existing table/columns before retrying; do not re-run the whole migration blindly. For a fresh import, `database/interserver.sql` includes the current schema.
 2. Generate long random webhook and cron secrets (each at least 32 characters). On InterServer, add these values to the private `api/config.php`; keep the API token and secrets server-side, never in frontend code or chat:
 
    ```php
@@ -153,6 +158,15 @@ To connect the active WaAPI instance:
 7. Test a sandbox order and verify the payment confirmation message and invoice email, update its status once and verify the matching status template, then award a test prize and open its scratch-card link. In admin, verify **Insights** uses paid orders and **Campaigns** only contains opted-in customers. Send campaign batches only after you are ready to message those customers.
 
 The lead inbox stores the latest message per WhatsApp chat ID, including WhatsApp privacy-preserving LIDs. Such IDs may not have a directly openable `wa.me` link; WaAPI can still reply to the incoming chat ID. A message from a person after a lead was closed reopens the lead. Apply the project's privacy/retention policy before production use.
+
+## Customer accounts and WhatsApp sign-in
+
+- The first checkout creates a customer record; later orders reuse it. The phone number is the account identity (matched first, then email), so a customer who changes email keeps their order history.
+- Customer IDs are `ddmmyyyy` (IST) plus 10 random characters, for example `11112026K4M29XQPAB`. Order numbers are `ORD-ddmmyyyy-` plus 10 random characters, for example `ORD-11112026-A1B2C3D4E5`.
+- `/account` signs a customer in with a six-digit code sent to their WhatsApp number. It requires `waapi_instance_id`, `waapi_api_token` and `customer_otp_secret`; without them the API returns `503` instead of failing silently.
+- Codes are valid for five minutes, allow five attempts, are single-use, and are HMAC-hashed in `customer_otp_challenges`. Requests are rate-limited, and stored WhatsApp conversations redact one-time codes.
+- The profile link appears in the header once this browser holds a customer code, and returning browsers see a dismissible sign-in card. Browsing and checkout never require sign-in.
+- In the local client preview (`VITE_DEMO_MODE=true`) the WhatsApp code is `123456`, because the preview cannot send messages.
 
 ## Validation and known external dependencies
 
