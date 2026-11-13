@@ -6,7 +6,7 @@ const DEMO_SESSION_KEY = "3dp-client-demo-session";
 const DEMO_CUSTOMER_SESSION_KEY = "3dp-client-demo-customer";
 
 /** The preview never sends WhatsApp messages; this fixed code stands in for OTP. */
-const DEMO_OTP_CODE = "123456";
+const DEMO_OTP_CODE = "K7M2X9";
 
 type DemoProduct = Product & { active: boolean; createdAt: string };
 type DemoOrder = Order & { marketingOptIn?: boolean };
@@ -444,7 +444,7 @@ export async function demoApiRequest<T>(
   }
   if (route === "/api/customer/auth/verify" && method === "POST") {
     const phone = String(payload.phone ?? "");
-    if (String(payload.code ?? "").trim() !== DEMO_OTP_CODE) {
+    if (String(payload.code ?? "").trim().toUpperCase() !== DEMO_OTP_CODE) {
       badRequest("The code is invalid or expired.", 400);
     }
     const session = demoCustomerSession(db, phone);

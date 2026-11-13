@@ -322,7 +322,7 @@ The project has evolved through these user-requested areas:
 11. Refined trigger matching to recognize compact/spaced brand forms and request/question wording, while suppressing messages that merely mention the business without an apparent enquiry.
 12. Added time-boxed product offers with IST start/end times, live storefront countdowns, and server-side re-pricing so the displayed cart total cannot go stale.
 13. Restricted delivery to Tamil Nadu districts in both the checkout UI and the API.
-14. Added customer accounts: `ddmmyyyy`-prefixed customer IDs and `ORD-ddmmyyyy-…` order numbers, six-digit WhatsApp one-time-code sign-in, a profile unlocked after the first order, and a dismissible returning-customer prompt.
+14. Added customer accounts: `ddmmyyyy`-prefixed customer IDs and `ORD-ddmmyyyy-…` order numbers, six-character (A–Z, 0–9) WhatsApp one-time-code sign-in, a profile unlocked after the first order, and a dismissible returning-customer prompt.
 15. Fixed the WhatsApp media helpers (they were declared inside another function, which broke invoice media and paid-order image messages), and changed the admin unanswered-enquiry alert to stay red until a human replies rather than clearing when the automated follow-up is sent.
 
 Recent frontend areas/files include:

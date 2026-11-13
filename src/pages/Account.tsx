@@ -66,8 +66,8 @@ export function Account() {
 
   const verifyCode = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!/^\d{6}$/.test(code.trim())) {
-      setError("Enter the six-digit code sent to your WhatsApp.");
+    if (!/^[A-Z0-9]{6}$/.test(code.trim())) {
+      setError("Enter the six-character code sent to your WhatsApp.");
       return;
     }
     setSending(true);
@@ -151,7 +151,7 @@ export function Account() {
           </h2>
           <p className="mt-1 text-[12px] leading-relaxed text-white/45">
             {codeRequested
-              ? "If your number is linked to an order, a six-digit code will arrive in WhatsApp."
+              ? "If your number is linked to an order, a six-character code (letters and numbers) is sent to your WhatsApp or the email on that order."
               : "Use the mobile number you entered when placing an order."}
           </p>
           <label className="label mt-5" htmlFor="account-phone">Mobile number</label>
@@ -175,17 +175,20 @@ export function Account() {
           </div>
           {codeRequested && (
             <>
-              <label className="label mt-4" htmlFor="account-code">Six-digit code</label>
+              <label className="label mt-4" htmlFor="account-code">Six-character code</label>
               <div className="relative mt-1">
                 <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
                 <input
                   id="account-code"
                   className="field pl-10 font-mono tracking-[0.25em]"
                   value={code}
-                  onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                  inputMode="numeric"
+                  onChange={(event) => setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
+                  inputMode="text"
+                  autoCapitalize="characters"
+                  spellCheck={false}
                   autoComplete="one-time-code"
                   maxLength={6}
+                  placeholder="K7M2X9"
                   required
                 />
               </div>

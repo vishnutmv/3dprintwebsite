@@ -8,7 +8,7 @@ React, TypeScript and Vite storefront on Vercel, with a PHP 8.2 API, MariaDB and
 - Time-boxed product offers: an optional promotion price with an IST start and end time, shown on the storefront with a live countdown. The server re-prices every order and rejects a cart whose displayed total has gone stale.
 - Server-priced orders, customer codes, order history, Razorpay signature checks, payment webhooks, and idempotent payment status updates.
 - Tamil Nadu-only delivery: checkout lists the 38 districts, locks the state, and the API rejects any other district, state or PIN code.
-- Customer accounts created by the first order, with `ddmmyyyy` + 10 character customer IDs and `ORD-ddmmyyyy-…` order numbers. Returning customers sign in with a six-digit WhatsApp code.
+- Customer accounts created by the first order, with `ddmmyyyy` + 10 character customer IDs and `ORD-ddmmyyyy-…` order numbers. Returning customers sign in with a six-character WhatsApp code.
 - Admin login and protected PHP product, order, customer, prize, settings and media endpoints.
 - Manual prize assignment and collaborator-sponsored offers share quantity-aware inventory and a private, one-time scratch-to-reveal card. Revealing downloads a PDF; customers can explicitly share it from a supported device/browser.
 - WhatsApp enquiries match compact and spaced 3D Print Co. mentions, capture follow-up details, link known customer numbers, and exclude existing customers from cold-lead conversion metrics. Automated answers use a fixed product catalogue reply or the shop link; no AI provider is configured.
@@ -94,7 +94,7 @@ The TypeScript files under `api/` and Supabase migrations are historical referen
 | `resend_api_key`, `notify_from` | Server only, optional | Resend email delivery |
 | `notify_webhook_url` | Server only, optional | Trusted notification relay you control |
 | `storefront_url` | Server only | Public HTTPS storefront used for prize reveal links |
-| `customer_otp_secret` | Server only | HMAC key for six-digit customer sign-in codes; at least 32 random characters |
+| `customer_otp_secret` | Server only, recommended | HMAC key for six-character (A–Z, 0–9) customer sign-in codes; at least 32 random characters. If absent, a stable key is derived from `admin_secret` so older config files keep working |
 | `waapi_instance_id`, `waapi_api_token` | Server only, optional | WaAPI outbound customer messages, sign-in codes and opt-in campaign sends |
 
 Use a unique, strong admin password. If optional notification credentials are absent, prize/order messages are not delivered and the API reports `not_configured`. A generic webhook is only a transport hook; it is not a WhatsApp integration until connected to and tested with an authorized WhatsApp provider.
@@ -163,7 +163,7 @@ The lead inbox stores the latest message per WhatsApp chat ID, including WhatsAp
 
 - The first checkout creates a customer record; later orders reuse it. The phone number is the account identity (matched first, then email), so a customer who changes email keeps their order history.
 - Customer IDs are `ddmmyyyy` (IST) plus 10 random characters, for example `11112026K4M29XQPAB`. Order numbers are `ORD-ddmmyyyy-` plus 10 random characters, for example `ORD-11112026-A1B2C3D4E5`.
-- `/account` signs a customer in with a six-digit code sent to their WhatsApp number. It requires `waapi_instance_id`, `waapi_api_token` and `customer_otp_secret`; without them the API returns `503` instead of failing silently.
+- `/account` signs a customer in with a six-character code (A–Z and 0–9) delivered over WhatsApp when `waapi_instance_id` and `waapi_api_token` are set, otherwise by email through Resend to the address on the customer record. With no delivery channel configured the API returns `503` instead of failing silently.
 - Codes are valid for five minutes, allow five attempts, are single-use, and are HMAC-hashed in `customer_otp_challenges`. Requests are rate-limited, and stored WhatsApp conversations redact one-time codes.
 - The profile link appears in the header once this browser holds a customer code, and returning browsers see a dismissible sign-in card. Browsing and checkout never require sign-in.
 - In the local client preview (`VITE_DEMO_MODE=true`) the WhatsApp code is `123456`, because the preview cannot send messages.

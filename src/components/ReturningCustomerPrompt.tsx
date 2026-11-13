@@ -56,7 +56,7 @@ export function ReturningCustomerPrompt() {
       <p className="text-[9.5px] font-bold uppercase tracking-[0.18em] text-violet-300">Welcome back</p>
       <p className="mt-1 text-[13.5px] font-semibold text-white">See your orders in one place</p>
       <p className="mt-1 pr-4 text-[11.5px] leading-relaxed text-white/45">
-        Sign in with a six-digit WhatsApp code using the number you ordered with. No password needed.
+        Sign in with a six-character WhatsApp code using the number you ordered with. No password needed.
       </p>
       <div className="mt-3 flex gap-2">
         <Link to="/account" onClick={dismiss} className="btn-primary !py-2 !text-[11.5px]">

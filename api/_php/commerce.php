@@ -229,6 +229,21 @@ function find_customer_for_login(string $phone): ?array
     return $match ? one('SELECT * FROM customers WHERE id=?', [$match['id']]) : null;
 }
 
+/**
+ * Signing key for one-time customer codes. `customer_otp_secret` is preferred, but
+ * config files written before it existed must keep working: fall back to a stable
+ * key derived from the admin secret so sign-in never fails closed for that reason.
+ */
+function customer_otp_secret(): string
+{
+    global $config;
+    $secret = trim((string)($config['customer_otp_secret'] ?? ''));
+    if (strlen($secret) >= 32) return $secret;
+    $seed = trim((string)($config['admin_secret'] ?? '')) . '|' . trim((string)($config['site_url'] ?? ''));
+    if (strlen($seed) < 24) return '';
+    return hash_hmac('sha256', '3dprintco-customer-otp-v1', $seed);
+}
+
 function customer_orders_response(array $customer): array
 {
     $orders = all('SELECT * FROM orders WHERE customer_id=? ORDER BY created_at DESC LIMIT 100', [$customer['id']]);
@@ -258,13 +273,23 @@ function handle_commerce(string $path, array $parts): bool
         $input = body();
         $phone = normalize_indian_mobile(text_value($input['phone'] ?? '', 24));
         if ($phone === null) fail(400, 'Enter the Indian mobile number used at checkout.');
-        if (empty($config['customer_otp_secret']) || empty($config['waapi_api_token']) || empty($config['waapi_instance_id'])) {
-            fail(503, 'WhatsApp sign-in is not configured. Please contact the store.');
+        $otpSecret = customer_otp_secret();
+        $whatsappReady = !empty($config['waapi_api_token']) && !empty($config['waapi_instance_id']);
+        $emailReady = notification_capabilities()['email'];
+        if ($otpSecret === '' || (!$whatsappReady && !$emailReady)) {
+            $missing = [];
+            if ($otpSecret === '') $missing[] = 'customer_otp_secret (or admin_secret) for signing';
+            if (!$whatsappReady) $missing[] = 'waapi_instance_id/waapi_api_token';
+            if (!$emailReady) $missing[] = 'resend_api_key/notify_from';
+            error_log('[interserver-api] Customer sign-in unavailable; api/config.php is missing: ' . implode(' + ', $missing));
+            fail(503, 'Customer sign-in is not configured. Please contact the store.');
         }
         $customer = find_customer_for_login($phone);
         if (!$customer) respond(200, ['message' => 'If an account exists for this number, a sign-in code has been sent.']);
 
-        $otp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        $otp = '';
+        for ($i = 0; $i < 6; $i++) $otp .= $alphabet[random_int(0, strlen($alphabet) - 1)];
         $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $nowSql = $now->format('Y-m-d H:i:s');
         $expiresAt = $now->modify('+5 minutes');
@@ -272,7 +297,7 @@ function handle_commerce(string $path, array $parts): bool
         $hash = hash_hmac(
             'sha256',
             $otp . '|' . $customer['id'] . '|' . $expiresSql,
-            (string)$config['customer_otp_secret'],
+            $otpSecret,
         );
         $pdo = db();
         $pdo->beginTransaction();
@@ -310,16 +335,19 @@ function handle_commerce(string $path, array $parts): bool
             throw $error;
         }
 
-        $sent = send_whatsapp_text(
-            $phone . '@c.us',
-            'Your 3D Print Co. sign-in code is ' . $otp . ". It expires in 5 minutes. Never share it.",
-        );
+        $message = 'Your 3D Print Co. sign-in code is ' . $otp . '. It expires in 5 minutes. Never share it.';
+        if ($whatsappReady) {
+            $sent = send_whatsapp_text($phone . '@c.us', $message);
+        } else {
+            $email = trim((string)($customer['email'] ?? ''));
+            $sent = $email !== '' && notify_event($email, 'customer_signin_code', 'Your 3D Print Co. sign-in code', $message) === 'sent';
+        }
         if (!$sent) {
             run(
                 'UPDATE customer_otp_challenges SET expires_at=UTC_TIMESTAMP(), otp_hash=? WHERE customer_id=?',
                 [hash('sha256', random_bytes(32)), $customer['id']],
             );
-            fail(502, 'WhatsApp could not deliver your sign-in code. Please try again later.');
+            fail(502, 'We could not deliver your sign-in code. Please try again later.');
         }
         respond(200, ['message' => 'If an account exists for this number, a sign-in code has been sent.']);
     }
@@ -327,8 +355,8 @@ function handle_commerce(string $path, array $parts): bool
         rate_limit('customer-otp-verify', 10, 600);
         $input = body();
         $phone = normalize_indian_mobile(text_value($input['phone'] ?? '', 24));
-        $otp = text_value($input['code'] ?? '', 6);
-        if ($phone === null || !preg_match('/^\d{6}$/', $otp)) fail(400, 'The code is invalid or expired.');
+        $otp = strtoupper(trim(text_value($input['code'] ?? '', 6)));
+        if ($phone === null || !preg_match('/^[A-Z0-9]{6}$/', $otp)) fail(400, 'The code is invalid or expired.');
         $customer = find_customer_for_login($phone);
         if (!$customer) fail(400, 'The code is invalid or expired.');
         $pdo = db();
@@ -347,7 +375,7 @@ function handle_commerce(string $path, array $parts): bool
             $expected = hash_hmac(
                 'sha256',
                 $otp . '|' . $customer['id'] . '|' . $challenge['expires_at'],
-                (string)($config['customer_otp_secret'] ?? ''),
+                customer_otp_secret(),
             );
             if (!hash_equals((string)$challenge['otp_hash'], $expected)) {
                 run('UPDATE customer_otp_challenges SET attempts=attempts+1 WHERE customer_id=?', [$customer['id']]);
