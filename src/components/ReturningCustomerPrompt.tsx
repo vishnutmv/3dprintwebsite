@@ -43,7 +43,7 @@ export function ReturningCustomerPrompt() {
   return (
     <aside
       aria-label="Sign in to your account"
-      className="fixed bottom-4 right-4 z-40 w-[min(330px,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-white p-4 shadow-[0_18px_40px_-18px_rgba(44,43,34,.45)]"
+      className="returning-prompt fixed bottom-4 right-4 z-40 w-[min(330px,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-white p-4 shadow-[0_18px_40px_-18px_rgba(44,43,34,.45)]"
     >
       <button
         type="button"

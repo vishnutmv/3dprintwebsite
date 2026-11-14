@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { OrderTracker } from "@/components/OrderTracker";
 import { ProductCard } from "@/components/ProductCard";
+import { ReceiptModal } from "@/components/ReceiptModal";
 import { StatusPill } from "@/components/ui";
 import { ApiError, apiGet, apiPatch, apiPost } from "@/lib/api";
 import { useAccount } from "@/lib/account";
@@ -74,6 +75,7 @@ export function Account() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -408,6 +410,7 @@ export function Account() {
               customerCode={data.customer.code}
               expandedOrder={expandedOrder}
               onToggle={(number) => setExpandedOrder((current) => (current === number ? null : number))}
+              onViewReceipt={setReceiptOrder}
               paidCount={paidOrders.length}
             />
           )}
@@ -425,7 +428,7 @@ export function Account() {
             />
           )}
 
-          {activeTab === "invoices" && <InvoicesTab orders={paidOrders} />}
+          {activeTab === "invoices" && <InvoicesTab orders={paidOrders} onViewReceipt={setReceiptOrder} />}
 
           {activeTab === "history" && (
             <HistoryTab
@@ -442,6 +445,8 @@ export function Account() {
           {activeTab === "notifications" && <NotificationsTab />}
         </>
       )}
+
+      {receiptOrder && <ReceiptModal order={receiptOrder} onClose={() => setReceiptOrder(null)} />}
     </div>
   );
 }
@@ -453,12 +458,14 @@ function OrdersTab({
   customerCode,
   expandedOrder,
   onToggle,
+  onViewReceipt,
   paidCount,
 }: {
   orders: Order[];
   customerCode: string;
   expandedOrder: string | null;
   onToggle: (orderNumber: string) => void;
+  onViewReceipt: (order: Order) => void;
   paidCount: number;
 }) {
   if (orders.length === 0) {
@@ -502,6 +509,13 @@ function OrdersTab({
                 </span>
               </button>
               <div className="flex shrink-0 flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn-glass !px-3 !py-1.5 text-[11px]"
+                  onClick={() => onViewReceipt(order)}
+                >
+                  <ReceiptText className="h-3.5 w-3.5" /> View receipt
+                </button>
                 {order.paymentStatus === "paid" && (
                   <button
                     type="button"
@@ -657,7 +671,7 @@ function Detail({ label, value, mono }: { label: string; value: string; mono?: b
 
 /* -------------------------------- Invoices ------------------------------ */
 
-function InvoicesTab({ orders }: { orders: Order[] }) {
+function InvoicesTab({ orders, onViewReceipt }: { orders: Order[]; onViewReceipt: (order: Order) => void }) {
   if (orders.length === 0) {
     return (
       <div className="glass mt-4 rounded-2xl p-8 text-center">
@@ -680,8 +694,15 @@ function InvoicesTab({ orders }: { orders: Order[] }) {
               <p className="font-mono text-[11.5px] text-violet-200">{order.orderNumber}</p>
               <p className="mt-0.5 text-[11px] text-white/45">{shortDate(order.createdAt)} · {inr(order.total)} · {order.items.length} line items</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <StatusPill status={order.paymentStatus} />
+              <button
+                type="button"
+                className="btn-glass !px-3 !py-1.5 text-[11px]"
+                onClick={() => onViewReceipt(order)}
+              >
+                <ReceiptText className="h-3.5 w-3.5" /> View receipt
+              </button>
               <button
                 type="button"
                 className="btn-glass !px-3 !py-1.5 text-[11px]"

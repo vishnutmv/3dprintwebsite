@@ -7,6 +7,7 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { Bell, Heart, MessageCircle, ShieldCheck, ShoppingBag, UserRound } from "lucide-react";
 import { Logo } from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 import { firstName, useAccount } from "@/lib/account";
 import { useSocial } from "@/lib/social";
 import { cn } from "@/lib/format";
@@ -123,9 +124,10 @@ export function SiteHeader() {
               )}
             </Link>
 
+            <ThemeToggle className="mr-1" />
             <Link
               to="/admin"
-              className="grid h-9 w-9 place-items-center rounded-xl text-white/45 transition hover:bg-white/[0.06] hover:text-white"
+              className="hidden h-9 w-9 place-items-center rounded-xl text-white/45 transition hover:bg-white/[0.06] hover:text-white sm:grid"
               aria-label="Admin panel"
             >
               <ShieldCheck className="h-4 w-4" />

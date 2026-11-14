@@ -240,7 +240,7 @@ export function AdminReviews() {
                 {review.adminReply && (
                   <div className="mt-2.5 rounded-xl border border-violet-300/20 bg-violet-400/[0.06] px-3 py-2.5">
                     <p className="flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.12em] text-violet-200">
-                      <Check className="h-3 w-3" /> Reply as {review.adminReplyBy || adminName}
+                      <Check className="h-3 w-3" /> Reply from {adminName}
                     </p>
                     <p className="mt-1 whitespace-pre-line text-[11.5px] leading-relaxed text-white/60">{review.adminReply}</p>
                   </div>

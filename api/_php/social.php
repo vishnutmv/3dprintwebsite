@@ -1,13 +1,17 @@
 <?php
 declare(strict_types=1);
 
+/** The public studio identity shown against replies (never the login email). */
+const ADMIN_PUBLIC_NAME = 'admin@zencmart';
+
 /**
  * Storefront social features.
  *
  * Product ratings/reviews are public to read and require a signed-in customer
  * to write. Favourites and the notification inbox are private to the signed-in
- * customer. Admin replies are attributed to the configured admin email and are
- * pushed back into the customer's web inbox (and WhatsApp when configured).
+ * customer. Admin replies are attributed to the public studio identity
+ * (admin@zencmart) and pushed into the customer's inbox (and WhatsApp when
+ * configured).
  */
 
 /** Migration 0017 may not have run yet; never break the storefront for that. */
@@ -49,11 +53,11 @@ function review_out(array $row): array
         'customerCode' => $row['customer_code'] ?? null,
         'authorName' => $row['author_name'],
         'isAdmin' => (bool)$row['is_admin'],
-        'rating' => $row['rating'] === null ? null : (int)$row['rating'],
+        'rating' => $row['rating'] === null ? null : (float)$row['rating'],
         'title' => $row['title'] ?? '',
         'body' => $row['body'],
         'adminReply' => $row['admin_reply'] ?? null,
-        'adminReplyBy' => $row['admin_reply_by'] ?? null,
+        'adminReplyBy' => ($row['admin_reply'] ?? null) !== null ? ADMIN_PUBLIC_NAME : null,
         'adminRepliedAt' => utc_iso($row['admin_replied_at'] ?? null),
         'status' => $row['status'] ?? 'published',
         'adminSeen' => ($row['admin_seen_at'] ?? null) !== null,
@@ -76,11 +80,13 @@ function review_summary(string $productId): array
     $total = 0;
     $sum = 0;
     foreach ($rows as $row) {
-        $star = max(1, min(5, (int)$row['rating']));
+        // Half stars roll up into the nearest whole-star bucket for the histogram.
+        $value = (float)$row['rating'];
+        $star = max(1, min(5, (int)ceil($value)));
         $count = (int)$row['total'];
         $summary['distribution'][(string)$star] = $count;
         $total += $count;
-        $sum += $star * $count;
+        $sum += $value * $count;
     }
     $summary['count'] = $total;
     $summary['average'] = $total > 0 ? round($sum / $total, 2) : 0.0;
@@ -207,8 +213,7 @@ function customer_transactions_response(array $customer): array
 
 function admin_display_name(): string
 {
-    $email = admin_email();
-    return $email !== '' ? $email : 'admin@zencmart';
+    return ADMIN_PUBLIC_NAME;
 }
 
 function admin_review_out(array $row): array
@@ -260,8 +265,10 @@ function handle_social(string $path, array $parts): bool
         $product = resolve_review_product(rawurldecode($parts[1]));
         if (!$product) fail(404, 'Product not found.');
         $input = body();
-        $rating = filter_var($input['rating'] ?? null, FILTER_VALIDATE_INT);
-        if ($rating === false || $rating < 1 || $rating > 5) fail(400, 'Choose a rating from 1 to 5 stars.');
+        $rating = $input['rating'] ?? null;
+        if (!is_numeric($rating)) fail(400, 'Choose a rating from 1 to 5 stars.');
+        $rating = round((float)$rating * 2) / 2;
+        if ($rating < 1 || $rating > 5) fail(400, 'Choose a rating from 1 to 5 stars.');
         $body = text_value($input['body'] ?? '', 1200);
         if (mb_strlen($body) < 4) fail(400, 'Write a sentence or two about the product.');
         $title = text_value($input['title'] ?? '', 160);

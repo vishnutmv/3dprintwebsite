@@ -284,7 +284,7 @@ CREATE TABLE IF NOT EXISTS product_reviews (
   author_name VARCHAR(120) NOT NULL,
   author_email VARCHAR(254) NULL,
   is_admin TINYINT(1) NOT NULL DEFAULT 0,
-  rating TINYINT UNSIGNED NULL,
+  rating DECIMAL(2,1) NULL,
   title VARCHAR(160) NOT NULL DEFAULT '',
   body TEXT NOT NULL,
   admin_reply TEXT NULL,

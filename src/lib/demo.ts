@@ -7,6 +7,8 @@ const DEMO_CUSTOMER_SESSION_KEY = "3dp-client-demo-customer";
 
 /** The preview never sends WhatsApp messages; this fixed code stands in for OTP. */
 const DEMO_OTP_CODE = "K7M2X9";
+/** Public studio identity shown on review replies — never the admin login email. */
+const DEMO_ADMIN_PUBLIC_NAME = "admin@zencmart";
 
 type DemoProduct = Product & { active: boolean; createdAt: string };
 type DemoOrder = Order & { marketingOptIn?: boolean };
@@ -216,7 +218,7 @@ function seedDemoDb(): DemoDb {
       id: "demo-rev-01", productId: "demo-p-01", productName: "Articulated Desk Dragon", productSlug: "articulated-dragon",
       customerCode: "11112026K4M29XQPAB", authorName: "Aarav Menon", isAdmin: false, rating: 5, title: "Better than the photos",
       body: "The joints move smoothly and it survived a week on my desk. Packaging was excellent.",
-      adminReply: "Thank you Aarav! Glad the joints held up — enjoy the dragon.", adminReplyBy: "admin@3dprintco.in",
+      adminReply: "Thank you Aarav! Glad the joints held up — enjoy the dragon.", adminReplyBy: DEMO_ADMIN_PUBLIC_NAME,
       adminRepliedAt: daysAgo(1), status: "published", adminSeen: true, createdAt: daysAgo(2),
     },
     {
@@ -379,9 +381,11 @@ function demoReviewSummary(db: DemoDb, productId: string) {
   const rated = db.reviews.filter((review) => review.productId === productId && review.status !== "hidden" && review.rating !== null);
   let sum = 0;
   for (const review of rated) {
-    const star = Math.max(1, Math.min(5, review.rating ?? 0)) as 1 | 2 | 3 | 4 | 5;
+    const value = review.rating ?? 0;
+    // Half stars roll up into the nearest whole-star bucket for the histogram.
+    const star = Math.max(1, Math.min(5, Math.ceil(value))) as 1 | 2 | 3 | 4 | 5;
     distribution[String(star) as keyof typeof distribution]++;
-    sum += star;
+    sum += value;
   }
   return {
     average: rated.length ? Math.round((sum / rated.length) * 100) / 100 : 0,
@@ -633,14 +637,14 @@ export async function demoApiRequest<T>(
       return jsonResponse({
         reviews: demoReviewsForProduct(db, product).filter((review) => review.status !== "hidden"),
         summary: demoReviewSummary(db, product.id),
-        adminName: import.meta.env.VITE_DEMO_ADMIN_EMAIL || "admin@3dprintco.in",
+        adminName: DEMO_ADMIN_PUBLIC_NAME,
       }) as T;
     }
     if (method === "POST") {
       const code = demoCurrentCode(db);
       const rating = Number(payload.rating);
       const body = String(payload.body ?? "").trim();
-      if (!Number.isInteger(rating) || rating < 1 || rating > 5) badRequest("Choose a rating from 1 to 5 stars.");
+      if (!Number.isFinite(rating) || rating % 0.5 !== 0 || rating < 1 || rating > 5) badRequest("Choose a rating from 1 to 5 stars.");
       if (body.length < 4) badRequest("Write a sentence or two about the product.");
       if (db.reviews.some((review) => review.productId === product.id && review.customerCode === code)) {
         badRequest("You have already reviewed this product.", 409);
@@ -1039,7 +1043,7 @@ export async function demoApiRequest<T>(
   }
   if (route === "/api/admin/reviews" && method === "GET") {
     const reviews = [...db.reviews];
-    const adminName = import.meta.env.VITE_DEMO_ADMIN_EMAIL || "admin@3dprintco.in";
+    const adminName = DEMO_ADMIN_PUBLIC_NAME;
     for (const review of reviews) {
       if (!review.isAdmin) review.adminSeen = true;
       const customer = customersFrom(db.orders).find((item) => item.customerCode === review.customerCode)
@@ -1057,7 +1061,7 @@ export async function demoApiRequest<T>(
     const reply = String(payload.reply ?? "").trim();
     if (reply.length < 2) badRequest("Write a reply before sending it.");
     review.adminReply = reply;
-    review.adminReplyBy = import.meta.env.VITE_DEMO_ADMIN_EMAIL || "admin@3dprintco.in";
+    review.adminReplyBy = DEMO_ADMIN_PUBLIC_NAME;
     review.adminRepliedAt = new Date().toISOString();
     review.adminSeen = true;
     if (review.customerCode) {

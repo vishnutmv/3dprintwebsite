@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f8f7f3" />
+    <script>
+      // Apply the saved day/night preference before first paint (no flash).
+      (function () {
+        try {
+          var saved = localStorage.getItem("3dprintco-theme");
+          var theme = saved === "dark" ? "dark" : "light";
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+        } catch (error) {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
     <meta
       name="description"
       content="3D Print Co. — small-batch 3D printed miniatures, desk gear and prototypes. Printed in Chennai, shipped across India. Every paid order enters the monthly draw."

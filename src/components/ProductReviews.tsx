@@ -20,14 +20,105 @@ const emptySummary: ReviewSummary = {
 
 export function Stars({ value, className = "h-3.5 w-3.5" }: { value: number; className?: string }) {
   return (
-    <span className="inline-flex items-center gap-0.5" aria-label={`${value} out of 5 stars`}>
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Star
-          key={star}
-          className={`${className} ${star <= Math.round(value) ? "fill-current text-sun" : "text-white/20"}`}
-        />
-      ))}
+    <span
+      className="inline-flex items-center gap-0.5"
+      role="img"
+      aria-label={`${value.toFixed(1).replace(/\.0$/, "")} out of 5 stars`}
+    >
+      {[1, 2, 3, 4, 5].map((star) => {
+        const fill = Math.max(0, Math.min(1, value - (star - 1)));
+        return (
+          <span key={star} className="relative inline-block shrink-0">
+            <Star className={`${className} text-white/20`} strokeWidth={1.5} />
+            <span
+              aria-hidden
+              className="absolute inset-0 overflow-hidden"
+              style={{ width: `${fill * 100}%` }}
+            >
+              <Star className={`${className} fill-current text-sun`} strokeWidth={1.5} />
+            </span>
+          </span>
+        );
+      })}
     </span>
+  );
+}
+
+/**
+ * Interactive half-star picker. Starts empty, fills on hover and accepts
+ * whole or half values between 1 and 5.
+ */
+function RatingInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const shown = hover ?? value;
+
+  const valueAt = (event: React.PointerEvent<HTMLButtonElement> | React.MouseEvent<HTMLButtonElement>, star: number) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const leftHalf = event.clientX - rect.left < rect.width / 2;
+    return Math.max(1, leftHalf ? star - 0.5 : star);
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div
+        role="slider"
+        tabIndex={0}
+        aria-label="Your rating out of 5 stars"
+        aria-valuemin={1}
+        aria-valuemax={5}
+        aria-valuenow={value || 1}
+        aria-valuetext={value ? `${value} out of 5` : "No rating selected"}
+        className="flex items-center gap-0.5 rounded-lg"
+        onMouseLeave={() => setHover(null)}
+        onBlur={() => setHover(null)}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+            event.preventDefault();
+            onChange(Math.min(5, (value || 0.5) + 0.5));
+          } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+            event.preventDefault();
+            onChange(Math.max(1, (value || 1) - 0.5));
+          } else if (event.key === "Home") {
+            event.preventDefault();
+            onChange(1);
+          } else if (event.key === "End") {
+            event.preventDefault();
+            onChange(5);
+          }
+        }}
+      >
+        {[1, 2, 3, 4, 5].map((star) => {
+          const fill = Math.max(0, Math.min(1, shown - (star - 1)));
+          return (
+            <button
+              key={star}
+              type="button"
+              aria-label={`Set rating to ${star === 1 ? "1" : `${star - 0.5} or ${star}`} star${star === 1 ? "" : "s"}`}
+              onClick={(event) => onChange(valueAt(event, star))}
+              onPointerMove={(event) => setHover(valueAt(event, star))}
+              className="relative rounded-md p-0.5 transition-transform duration-150 hover:scale-110 focus-visible:scale-110"
+            >
+              <Star className="h-7 w-7 text-white/20" strokeWidth={1.5} />
+              <span
+                aria-hidden
+                className="absolute inset-0 overflow-hidden"
+                style={{ width: `${fill * 100}%` }}
+              >
+                <Star className="h-7 w-7 shrink-0 fill-current text-sun" strokeWidth={1.5} />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <span className="text-[11px] font-semibold text-white/45">
+        {shown > 0 ? `${shown} / 5` : "Select a rating"}
+      </span>
+      {value > 0 && (
+        <button type="button" onClick={() => onChange(0)} className="text-[10.5px] text-white/35 underline underline-offset-2 hover:text-white/60">
+          Clear
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -39,7 +130,7 @@ export function ProductReviews({ product }: { product: Product }) {
   const [summary, setSummary] = useState<ReviewSummary>(emptySummary);
   const [adminName, setAdminName] = useState("admin@zencmart");
   const [loading, setLoading] = useState(true);
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(0);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
@@ -67,6 +158,10 @@ export function ProductReviews({ product }: { product: Product }) {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
+    if (rating < 1) {
+      setError("Choose a rating before publishing.");
+      return;
+    }
     if (body.trim().length < 4) {
       setError("Write a sentence or two about the product.");
       return;
@@ -77,7 +172,7 @@ export function ProductReviews({ product }: { product: Product }) {
       setSummary(response.summary);
       setTitle("");
       setBody("");
-      setRating(5);
+      setRating(0);
       pushToast("Review published. Thank you!", "success");
       await load();
     } catch (caught) {
@@ -123,18 +218,8 @@ export function ProductReviews({ product }: { product: Product }) {
           {customer ? (
             <form onSubmit={submit}>
               <p className="text-[12.5px] font-semibold text-white/85">Rate this print</p>
-              <div className="mt-2 flex gap-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setRating(star)}
-                    className="rounded-md p-0.5 transition hover:scale-110"
-                    aria-label={`${star} star${star === 1 ? "" : "s"}`}
-                  >
-                    <Star className={`h-6 w-6 ${star <= rating ? "fill-current text-sun" : "text-white/20"}`} />
-                  </button>
-                ))}
+              <div className="mt-2">
+                <RatingInput value={rating} onChange={setRating} />
               </div>
               <input
                 className="field mt-3"
@@ -208,7 +293,7 @@ export function ProductReviews({ product }: { product: Product }) {
                   <div className="mt-2.5 rounded-xl border border-violet-300/20 bg-violet-400/[0.06] px-3 py-2.5">
                     <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-violet-200">
                       <BadgeCheck className="h-3 w-3" />
-                      Reply from {review.adminReplyBy || adminName}
+                      Reply from {adminName}
                     </p>
                     <p className="mt-1 whitespace-pre-line text-[11.5px] leading-relaxed text-white/60">{review.adminReply}</p>
                   </div>

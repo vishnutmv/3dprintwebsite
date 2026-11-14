@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { AdminMark } from "@/components/Logo";
 import { Toaster } from "@/components/Toaster";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAdminAuth } from "@/lib/auth";
 import { cn } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -62,6 +63,7 @@ function LoginScreen() {
 
   return (
     <div className="admin-shell relative grid min-h-screen place-items-center px-4">
+      <div className="absolute right-4 top-4"><ThemeToggle /></div>
       <div className="glass-deep liquid-edge w-full max-w-[400px] rounded-[2rem] p-7">
         <AdminMark />
         <h1 className="mt-6 text-[26px] leading-tight">Studio admin</h1>
@@ -316,6 +318,10 @@ export function AdminLayout() {
         </nav>
 
         <div className="mt-auto grid gap-2 px-1 pb-1">
+          <div className="flex items-center justify-between rounded-2xl px-3 py-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Appearance</span>
+            <ThemeToggle />
+          </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
             <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/35">Store</p>
             <p className="mt-1 truncate text-[12px] font-semibold text-white">{settings.storeName}</p>
@@ -414,13 +420,16 @@ export function AdminLayout() {
               )}
             </NavLink>
           ))}
-          <button
-            type="button"
-            onClick={() => void handleSignOut()}
-            className="ml-auto shrink-0 rounded-xl px-3 py-2 text-[12px] text-coral"
-          >
-            Exit
-          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              className="rounded-xl px-3 py-2 text-[12px] text-coral"
+            >
+              Exit
+            </button>
+          </div>
         </div>
 
         <div key={location.pathname} className="animate-pop pb-10">

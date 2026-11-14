@@ -165,8 +165,7 @@ export function OrderConfirmation() {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl border p-6 md:p-8"
-        style={{ background: "rgba(15,10,25,0.6)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(12px)" }}
+        className="glass rounded-2xl p-6 md:p-8"
       >
         <div className="mb-6 flex items-start justify-between gap-3">
           <div>
@@ -294,7 +293,7 @@ export function OrderConfirmation() {
               type="button"
               onClick={() => void retryPayment()}
               disabled={paying}
-              className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-60"
+              className="on-accent rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-60"
               style={{ background: "linear-gradient(135deg,#7c3aed,#ec4899)" }}
             >
               {paying ? (
