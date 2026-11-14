@@ -573,28 +573,72 @@ function handle_admin(string $path, array $parts): bool
         $rawTracking = trim((string)($input['trackingNumber'] ?? ''));
         if ($rawCourier === '' && $rawTracking === '') {
             run('UPDATE orders SET courier_slug=NULL,tracking_number=NULL,tracking_synced_at=NULL,tracking_payload=NULL WHERE id=?', [$details['order']['id']]);
-            respond(200, ['order' => mapped_details(order_details($number))]);
+            respond(200, [
+                'order' => mapped_details(order_details($number)),
+                'notifications' => ['email' => 'unchanged', 'whatsapp' => 'unchanged'],
+            ]);
         }
         if ($rawCourier === '' || $rawTracking === '') fail(400, 'Enter both the courier and the tracking number.');
         $courier = tracking_slug($rawCourier);
         if ($courier === '') fail(400, 'Choose a courier slug such as delhivery, dtdc, bluedart or speedpost.');
         $tracking = tracking_reference($rawTracking);
         if ($tracking === '') fail(400, 'Enter a valid AWB or tracking number (letters and digits, no spaces).');
+        $previousCourier = tracking_slug((string)($details['order']['courier_slug'] ?? ''));
+        $previousTracking = tracking_reference((string)($details['order']['tracking_number'] ?? ''));
+        $trackingChanged = $courier !== $previousCourier || $tracking !== $previousTracking;
         run(
             'UPDATE orders SET courier_slug=?,tracking_number=?,tracking_synced_at=NULL,tracking_payload=NULL WHERE id=?',
             [$courier, $tracking, $details['order']['id']],
         );
+        // Adding an AWB after handover is the dispatch event, so move a paid,
+        // unshipped order forward automatically instead of asking for two clicks.
+        if ($trackingChanged && ($details['order']['payment_status'] ?? '') === 'paid'
+            && in_array((string)($details['order']['order_status'] ?? ''), ['confirmed', 'processing', 'packed'], true)) {
+            run(
+                "UPDATE orders SET order_status='shipped' WHERE id=? AND order_status IN ('confirmed','processing','packed')",
+                [$details['order']['id']],
+            );
+        }
         $details = order_details($number);
-        add_customer_notification(
-            (string)$details['order']['customer_id'],
-            'tracking',
-            'Tracking added for ' . $number,
-            tracking_courier_name($courier) . ' · AWB ' . $tracking . '. Follow the live timeline in your profile.',
-            '/account?tab=orders',
-        );
+        $emailStatus = 'unchanged';
+        $whatsappStatus = 'unchanged';
+        if ($trackingChanged) {
+            $message = tracking_courier_name($courier) . ' · AWB ' . $tracking
+                . '. Follow the live timeline in your profile: /account?tab=orders';
+            add_customer_notification(
+                (string)$details['order']['customer_id'],
+                'tracking',
+                'Tracking added for ' . $number,
+                $message,
+                '/account?tab=orders',
+            );
+            if (!empty($details['customer']['email'])) {
+                $emailStatus = notify_event(
+                    $details['customer']['email'],
+                    'order.tracking',
+                    'Courier tracking for ' . $number,
+                    "Your parcel is on its way.\n\nCourier: " . tracking_courier_name($courier)
+                        . "\nAWB: " . $tracking
+                        . "\n\nTrack it from your profile: /account?tab=orders\n\n— 3D Print Co.",
+                    ['orderNumber' => $number, 'courier' => $courier, 'trackingNumber' => $tracking],
+                );
+            }
+            if (!empty($details['customer']['phone'])) {
+                global $config;
+                $whatsappStatus = !empty($config['waapi_api_token']) && !empty($config['waapi_instance_id'])
+                    ? (send_whatsapp_notification(
+                        (string)$details['customer']['phone'],
+                        (string)($details['customer']['full_name'] ?? ''),
+                        'Your order ' . $number . ' has been handed to ' . tracking_courier_name($courier)
+                            . '. AWB: ' . $tracking . '. Track it in your profile.',
+                    ) ? 'sent' : 'failed')
+                    : 'not_configured';
+            }
+        }
         respond(200, [
             'order' => mapped_details($details),
             'tracking' => tracking_snapshot($details['order'], true),
+            'notifications' => ['email' => $emailStatus, 'whatsapp' => $whatsappStatus],
         ]);
     }
     if (preg_match('#^admin/orders/([^/]+)$#', $path, $match) && $method === 'PATCH') {
@@ -633,6 +677,16 @@ function handle_admin(string $path, array $parts): bool
                     order_status_whatsapp_text($details, $status),
                     ) ? 'sent' : 'failed')
                     : 'not_configured';
+            }
+            if ($status === 'delivered') {
+                notify_event(
+                    admin_email(),
+                    'order.delivered',
+                    'Order ' . $number . ' delivered',
+                    'Order ' . $number . ' for ' . (string)($details['customer']['full_name'] ?? 'a customer')
+                        . ' was marked delivered. The customer has been notified.',
+                    ['orderNumber' => $number, 'customerCode' => (string)($details['customer']['customer_code'] ?? '')],
+                );
             }
         }
         respond(200, ['order' => mapped_details($details), 'notifications' => [

@@ -12,6 +12,7 @@ import { AdminLayout } from "./admin/AdminLayout";
 const Dashboard = lazy(() => import("./admin/Dashboard").then((module) => ({ default: module.Dashboard })));
 const AdminProducts = lazy(() => import("./admin/AdminProducts").then((module) => ({ default: module.AdminProducts })));
 const AdminOrders = lazy(() => import("./admin/AdminOrders").then((module) => ({ default: module.AdminOrders })));
+const AdminDispatch = lazy(() => import("./admin/AdminDispatch").then((module) => ({ default: module.AdminDispatch })));
 const AdminCustomers = lazy(() => import("./admin/AdminCustomers").then((module) => ({ default: module.AdminCustomers })));
 const AdminReviews = lazy(() => import("./admin/AdminReviews").then((module) => ({ default: module.AdminReviews })));
 const AdminLeads = lazy(() => import("./admin/AdminLeads").then((module) => ({ default: module.AdminLeads })));
@@ -70,6 +71,7 @@ const router = createBrowserRouter([
       { index: true, element: page(<Dashboard />) },
       { path: "products", element: page(<AdminProducts />) },
       { path: "orders", element: page(<AdminOrders />) },
+      { path: "dispatch", element: page(<AdminDispatch />) },
       { path: "customers", element: page(<AdminCustomers />) },
       { path: "reviews", element: page(<AdminReviews />) },
       { path: "leads", element: page(<AdminLeads />) },

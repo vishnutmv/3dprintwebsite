@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Star,
   Store,
+  Truck,
   Users,
 } from "lucide-react";
 import { AdminMark } from "@/components/Logo";
@@ -33,6 +34,7 @@ const nav = [
   { to: "/admin", label: "Dashboard", icon: Gauge, end: true },
   { to: "/admin/products", label: "Products", icon: Boxes },
   { to: "/admin/orders", label: "Orders", icon: Package },
+  { to: "/admin/dispatch", label: "Dispatch", icon: Truck },
   { to: "/admin/customers", label: "Customers", icon: Users },
   { to: "/admin/leads", label: "WhatsApp Inbox", icon: MessageCircle },
   { to: "/admin/reviews", label: "Ratings & Reviews", icon: Star },

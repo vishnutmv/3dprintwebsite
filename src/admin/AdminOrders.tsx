@@ -114,7 +114,7 @@ export function AdminOrders() {
     }
     setSavingShipment(true);
     try {
-      const updated = await updateOrderShipment(selected.orderNumber, {
+      const { order: updated, notifications } = await updateOrderShipment(selected.orderNumber, {
         courier: clear ? "" : shipmentCourier,
         trackingNumber: clear ? "" : shipmentTracking.trim(),
       });
@@ -124,8 +124,14 @@ export function AdminOrders() {
         setShipmentCourier("");
         setShipmentTracking("");
         toast("Courier tracking cleared", "success");
+      } else if (notifications.email === "failed" || notifications.whatsapp === "failed") {
+        toast("Courier tracking saved, but one customer notification failed.", "warn");
+      } else if (notifications.email === "unchanged" && notifications.whatsapp === "unchanged") {
+        toast("Courier tracking saved. The AWB was already on record, so no duplicate alert was sent.", "success");
       } else {
-        toast("Courier tracking saved. Customers can see live updates in their profile.", "success");
+        toast("Courier tracking saved. The customer has been notified by app" +
+          (notifications.email !== "not_configured" && notifications.email !== "unchanged" ? ", email" : "") +
+          (notifications.whatsapp !== "not_configured" && notifications.whatsapp !== "unchanged" ? " and WhatsApp" : "") + ".", "success");
       }
     } catch (caught) {
       toast(caught instanceof Error ? caught.message : "Could not save courier tracking", "error");

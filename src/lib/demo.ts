@@ -1017,6 +1017,8 @@ export async function demoApiRequest<T>(
     if (!order) badRequest("Order not found.", 404);
     const courier = String(payload.courier ?? "").toLowerCase().trim();
     const trackingNumber = String(payload.trackingNumber ?? "").toUpperCase().trim();
+    const previousCourier = order.courierSlug ?? "";
+    const previousTracking = order.trackingNumber ?? "";
     if (!courier && !trackingNumber) {
       order.courierSlug = null;
       order.trackingNumber = null;
@@ -1027,10 +1029,20 @@ export async function demoApiRequest<T>(
       order.courierSlug = courier;
       order.trackingNumber = trackingNumber;
       order.trackingSyncedAt = new Date().toISOString();
-      demoNotify(db, order.customerCode, "tracking", `Tracking added for ${order.orderNumber}`, `AWB ${trackingNumber}. Follow the live timeline in your profile.`, "/account?tab=orders");
+      order.updatedAt = order.trackingSyncedAt;
+      if (courier !== previousCourier || trackingNumber !== previousTracking) {
+        if (order.paymentStatus === "paid" && ["confirmed", "processing", "packed"].includes(order.orderStatus)) {
+          order.orderStatus = "shipped";
+          order.status = "shipped";
+        }
+        demoNotify(db, order.customerCode, "tracking", `Tracking added for ${order.orderNumber}`, `${courier.toUpperCase()} · AWB ${trackingNumber}. Follow the live timeline in your profile.`, "/account?tab=orders");
+      }
     }
     writeDb(db);
-    return jsonResponse({ order }) as T;
+    return jsonResponse({
+      order,
+      notifications: { email: "not_configured", whatsapp: "not_configured" },
+    }) as T;
   }
 
   if (route === "/api/admin/reviews/count" && method === "GET") {
@@ -1099,6 +1111,18 @@ export async function demoApiRequest<T>(
     order.orderStatus = orderStatus;
     order.status = orderStatus;
     order.updatedAt = new Date().toISOString();
+    if (changed && orderStatus !== "cancelled") {
+      demoNotify(
+        db,
+        order.customerCode,
+        "order_status",
+        `Order ${order.orderNumber} — ${orderStatus}`,
+        orderStatus === "delivered"
+          ? "Your order is marked delivered. We hope you love your 3D print!"
+          : `Your order status is now ${orderStatus}.`,
+        "/account?tab=orders",
+      );
+    }
     writeDb(db);
     return jsonResponse({ order, notifications: { whatsapp: changed ? "not_configured" : "unchanged" } }) as T;
   }

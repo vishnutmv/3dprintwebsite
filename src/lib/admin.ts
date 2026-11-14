@@ -5,7 +5,7 @@
 
 import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from "./api";
 import { useAdminAuth } from "./auth";
-import type { Order, Prize, Product, ProductReview, StoreSettings } from "./types";
+import type { Order, OrderTracking, Prize, Product, ProductReview, StoreSettings } from "./types";
 
 export type AdminProduct = Product & {
   active: boolean;
@@ -386,15 +386,23 @@ export async function updateOrderStatus(
   return response;
 }
 
+export type ShipmentUpdateResult = {
+  order: AdminOrder;
+  tracking?: OrderTracking;
+  notifications: {
+    email: "sent" | "failed" | "not_configured" | "unchanged";
+    whatsapp: "sent" | "failed" | "not_configured" | "unchanged";
+  };
+};
+
 export async function updateOrderShipment(
   orderNumber: string,
   shipment: { courier: string; trackingNumber: string },
-): Promise<AdminOrder> {
-  const response = await adminPatch<{ order: AdminOrder }>(
+): Promise<ShipmentUpdateResult> {
+  return adminPatch<ShipmentUpdateResult>(
     `/api/admin/orders/${encodeURIComponent(orderNumber)}/shipment`,
     shipment,
   );
-  return response.order;
 }
 
 /* ---------------------------- Reviews ------------------------------ */

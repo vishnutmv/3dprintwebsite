@@ -99,6 +99,69 @@ function tracking_state_label(string $state): string
 }
 
 /**
+ * The courier is the source of truth for delivery. When it reports delivered,
+ * close the order once and notify both the customer and the studio.
+ */
+function tracking_mark_delivered(array $order): void
+{
+    if (in_array((string)($order['order_status'] ?? ''), ['delivered', 'cancelled'], true)) return;
+    try {
+        $changed = run(
+            'UPDATE orders SET order_status="delivered" WHERE id=? AND order_status<>"delivered"',
+            [$order['id']],
+        )->rowCount() > 0;
+    } catch (Throwable $error) {
+        error_log('[interserver-api] Could not mark a tracked order delivered: ' . $error->getMessage());
+        return;
+    }
+    if (!$changed) return;
+
+    try {
+        $details = order_details((string)($order['order_number'] ?? ''));
+        if (!$details) return;
+        $number = (string)$details['order']['order_number'];
+        $message = order_status_whatsapp_text($details, 'delivered');
+        add_customer_notification(
+            (string)$details['order']['customer_id'],
+            'order_status',
+            'Order ' . $number . ' — Delivered',
+            $message,
+            '/account?tab=orders',
+        );
+        if (!empty($details['customer']['email'])) {
+            notify_event(
+                $details['customer']['email'],
+                'order.delivered',
+                'Delivered — ' . $number,
+                "The courier has marked your order delivered.\n\nOrder: " . $number . "\n\n"
+                    . $message . "\n\n— 3D Print Co.",
+                ['orderNumber' => $number, 'status' => 'delivered'],
+            );
+        }
+        if (!empty($details['customer']['phone'])) {
+            global $config;
+            if (!empty($config['waapi_api_token']) && !empty($config['waapi_instance_id'])) {
+                send_whatsapp_notification(
+                    (string)$details['customer']['phone'],
+                    (string)($details['customer']['full_name'] ?? ''),
+                    $message,
+                );
+            }
+        }
+        notify_event(
+            admin_email(),
+            'order.delivered',
+            'Order ' . $number . ' delivered',
+            'The courier marked order ' . $number . ' for ' . (string)($details['customer']['full_name'] ?? 'a customer')
+                . ' as delivered. The customer has been notified.',
+            ['orderNumber' => $number, 'customerCode' => (string)($details['customer']['customer_code'] ?? '')],
+        );
+    } catch (Throwable $error) {
+        error_log('[interserver-api] Delivered order notifications failed: ' . $error->getMessage());
+    }
+}
+
+/**
  * One provider lookup. Returns ['ok' => true, 'data' => [...]] or
  * ['ok' => false, 'reason' => 'not_configured'|'unavailable'|'config'].
  */
@@ -228,6 +291,7 @@ function tracking_snapshot(array $order, bool $force = false): array
     }
     if ($fresh && !$force) {
         $snapshot['statusLabel'] = tracking_state_label($snapshot['state']);
+        if ($snapshot['state'] === 'delivered') tracking_mark_delivered($order);
         return $snapshot;
     }
     if (!$apiReady) {
@@ -260,5 +324,6 @@ function tracking_snapshot(array $order, bool $force = false): array
         'destinationCity' => $snapshot['destinationCity'],
         'checkpoints' => $snapshot['checkpoints'],
     ]);
+    if ($snapshot['state'] === 'delivered') tracking_mark_delivered($order);
     return $snapshot;
 }
