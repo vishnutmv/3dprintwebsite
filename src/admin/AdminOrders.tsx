@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Loader2, Search, X } from "lucide-react";
+import { Download, Loader2, Search, Truck, X } from "lucide-react";
 import { StatusPill } from "@/components/ui";
 import { dateTime, inr } from "@/lib/format";
 import { useToast } from "@/lib/toast";
 import { downloadCsv } from "@/lib/csv";
 import {
+  TRACKING_COURIERS,
   getOrders,
+  updateOrderShipment,
   updateOrderStatus,
   type AdminOrder,
 } from "@/lib/admin";
@@ -36,6 +38,9 @@ export function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [savingStatus, setSavingStatus] = useState(false);
+  const [shipmentCourier, setShipmentCourier] = useState("");
+  const [shipmentTracking, setShipmentTracking] = useState("");
+  const [savingShipment, setSavingShipment] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,6 +66,11 @@ export function AdminOrders() {
     const timer = setTimeout(() => void load(), query.trim() ? 300 : 0);
     return () => clearTimeout(timer);
   }, [load, query]);
+
+  useEffect(() => {
+    setShipmentCourier(selected?.courierSlug ?? "");
+    setShipmentTracking(selected?.trackingNumber ?? "");
+  }, [selected?.orderNumber]);
 
   const counts = useMemo(
     () => ({
@@ -93,6 +103,34 @@ export function AdminOrders() {
       toast(caught instanceof Error ? caught.message : "Could not update status", "error");
     } finally {
       setSavingStatus(false);
+    }
+  };
+
+  const saveShipment = async (clear = false) => {
+    if (!selected) return;
+    if (!clear && (!shipmentCourier || !shipmentTracking.trim())) {
+      toast("Choose a courier and enter the AWB / tracking number.", "warn");
+      return;
+    }
+    setSavingShipment(true);
+    try {
+      const updated = await updateOrderShipment(selected.orderNumber, {
+        courier: clear ? "" : shipmentCourier,
+        trackingNumber: clear ? "" : shipmentTracking.trim(),
+      });
+      setOrders((current) => current.map((item) => (item.orderNumber === updated.orderNumber ? updated : item)));
+      setSelected(updated);
+      if (clear) {
+        setShipmentCourier("");
+        setShipmentTracking("");
+        toast("Courier tracking cleared", "success");
+      } else {
+        toast("Courier tracking saved. Customers can see live updates in their profile.", "success");
+      }
+    } catch (caught) {
+      toast(caught instanceof Error ? caught.message : "Could not save courier tracking", "error");
+    } finally {
+      setSavingShipment(false);
     }
   };
 
@@ -305,6 +343,52 @@ export function AdminOrders() {
               <p className="mt-1.5">
                 Payment status is controlled only by verified Razorpay callbacks or the signed webhook.
               </p>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.16em] text-white/40">
+                <Truck className="h-3.5 w-3.5" /> Courier & live tracking
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-white/40">
+                Powered by TrackCourier.io. Adding an AWB starts the customer timeline in their profile.
+              </p>
+              <div className="mt-2.5 grid gap-2 sm:grid-cols-[1fr_1fr]">
+                <select
+                  className="field"
+                  value={shipmentCourier}
+                  onChange={(event) => setShipmentCourier(event.target.value)}
+                  aria-label="Courier"
+                >
+                  <option value="">Select courier</option>
+                  {TRACKING_COURIERS.map((courier) => (
+                    <option key={courier.slug} value={courier.slug} className="bg-ink-900">{courier.name}</option>
+                  ))}
+                </select>
+                <input
+                  className="field font-mono uppercase"
+                  value={shipmentTracking}
+                  onChange={(event) => setShipmentTracking(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))}
+                  placeholder="AWB / tracking number"
+                  aria-label="AWB or tracking number"
+                />
+              </div>
+              {selected.trackingNumber && selected.courierSlug && (
+                <p className="mt-2 text-[10.5px] text-mint/80">
+                  Live: {selected.courierSlug} · {selected.trackingNumber}
+                  {selected.trackingSyncedAt ? ` · synced ${dateTime(selected.trackingSyncedAt)}` : ""}
+                </p>
+              )}
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                <button type="button" className="btn-primary !px-3.5 !py-2 text-[11.5px]" disabled={savingShipment} onClick={() => void saveShipment()}>{
+                  savingShipment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Truck className="h-3.5 w-3.5" />
+                } Save tracking
+                </button>
+                {(selected.trackingNumber || selected.courierSlug) && (
+                  <button type="button" className="btn-glass !px-3.5 !py-2 text-[11.5px]" disabled={savingShipment} onClick={() => void saveShipment(true)}>
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="mt-5">

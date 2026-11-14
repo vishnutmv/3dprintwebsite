@@ -5,8 +5,11 @@
  */
 
 import { Link } from "react-router-dom";
-import { Box } from "lucide-react";
+import { Box, Heart } from "lucide-react";
 import { inr } from "@/lib/format";
+import { useAccount } from "@/lib/account";
+import { useSocial } from "@/lib/social";
+import { useToast } from "@/lib/toast";
 import { effectiveProductPrice, promotionState, usePromotionClock } from "@/lib/promotions";
 import type { Product } from "@/lib/types";
 
@@ -14,7 +17,37 @@ export function ProductCard({ product }: { product: Product }) {
   const now = usePromotionClock();
   const price = effectiveProductPrice(product, now);
   const onOffer = promotionState(product, now) === "active";
+  const customer = useAccount((state) => state.customer);
+  const isFavorite = useSocial((state) => state.favorites.includes(product.id));
+  const toggleFavorite = useSocial((state) => state.toggleFavorite);
+  const pushToast = useToast((state) => state.push);
+
+  const save = async () => {
+    try {
+      const saved = await toggleFavorite(product);
+      pushToast(saved ? `${product.name} saved to favourites` : `${product.name} removed from favourites`, "success");
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "Could not update favourites", "error");
+    }
+  };
+
   return (
+    <div className="relative">
+      {customer && (
+        <button
+          type="button"
+          onClick={() => void save()}
+          className={`absolute right-3 top-3 z-20 grid h-8 w-8 place-items-center rounded-full border shadow-sm backdrop-blur transition ${
+            isFavorite
+              ? "border-coral/40 bg-coral text-white"
+              : "border-white/70 bg-white/85 text-ink-950 hover:bg-white"
+          }`}
+          aria-label={isFavorite ? `Remove ${product.name} from favourites` : `Add ${product.name} to favourites`}
+          title={isFavorite ? "Remove from favourites" : "Add to favourites"}
+        >
+          <Heart className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`} />
+        </button>
+      )}
     <Link
       to={`/product/${product.slug}`}
       className="glass card-lift group flex flex-col overflow-hidden rounded-3xl"
@@ -42,7 +75,7 @@ export function ProductCard({ product }: { product: Product }) {
           />
         )}
         {(product.badge || product.trendTag || onOffer) && (
-          <div className="absolute left-3 top-3 flex flex-col items-start gap-1">
+          <div className="absolute left-3 top-3 flex flex-col items-start gap-1 pr-10">
             {onOffer && <span className="rounded-full bg-coral px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-white shadow-sm">Offer</span>}
             {product.badge && <span className="rounded-full border border-white/20 bg-white/85 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.14em] text-ink-950 shadow-sm">{product.badge}</span>}
             {product.trendTag && <span className="rounded-full border border-sun/25 bg-ink-950/90 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-sun shadow-sm">{product.trendTag}</span>}
@@ -86,5 +119,6 @@ export function ProductCard({ product }: { product: Product }) {
         )}
       </div>
     </Link>
+    </div>
   );
 }

@@ -251,6 +251,9 @@ function order_out(array $order, array $customer, array $items): array
         'paymentId' => $order['razorpay_payment_id'], 'razorpayOrderId' => $order['razorpay_order_id'],
         'paymentMode' => 'razorpay', 'notes' => $order['notes'] ?? '',
         'createdAt' => $order['created_at'], 'updatedAt' => $order['updated_at'],
+        'trackingNumber' => $order['tracking_number'] ?? null,
+        'courierSlug' => $order['courier_slug'] ?? null,
+        'trackingSyncedAt' => isset($order['tracking_synced_at']) ? utc_iso((string)$order['tracking_synced_at']) : null,
         'items' => array_map(static fn(array $item): array => [
             'productId' => $item['product_id'] ?? '', 'name' => $item['product_name'],
             'qty' => (int)$item['quantity'], 'price' => (int)$item['unit_price'],

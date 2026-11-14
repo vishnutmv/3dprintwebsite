@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { ProductCard } from "@/components/ProductCard";
+import { StorePromos } from "@/components/StorePromos";
 import { EmptyState, SectionHead } from "@/components/ui";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/format";
@@ -65,7 +66,9 @@ export function Shop() {
         copy="Explore the products currently available from the store."
       />
 
-      <div className="glass mb-6 rounded-2xl p-3">
+      <StorePromos />
+
+      <div className="glass mb-6 mt-6 rounded-2xl p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[190px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />

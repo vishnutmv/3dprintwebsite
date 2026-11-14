@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Boxes,
@@ -15,6 +15,7 @@ import {
   Settings2,
   Send,
   ShieldCheck,
+  Star,
   Store,
   Users,
 } from "lucide-react";
@@ -25,7 +26,7 @@ import { cn } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { useToast } from "@/lib/toast";
 import { demoMode } from "@/lib/demo-mode";
-import { getLeadCounts } from "@/lib/admin";
+import { getLeadCounts, getReviewCount } from "@/lib/admin";
 
 const nav = [
   { to: "/admin", label: "Dashboard", icon: Gauge, end: true },
@@ -33,6 +34,7 @@ const nav = [
   { to: "/admin/orders", label: "Orders", icon: Package },
   { to: "/admin/customers", label: "Customers", icon: Users },
   { to: "/admin/leads", label: "WhatsApp Inbox", icon: MessageCircle },
+  { to: "/admin/reviews", label: "Ratings & Reviews", icon: Star },
   { to: "/admin/campaigns", label: "Campaigns", icon: Send },
   { to: "/admin/insights", label: "Insights", icon: BarChart3 },
   { to: "/admin/prizes", label: "Prizes", icon: Gift },
@@ -132,6 +134,8 @@ export function AdminLayout() {
   const [newLeadCount, setNewLeadCount] = useState(0);
   const [overdueLeadCount, setOverdueLeadCount] = useState(0);
   const [attentionCount, setAttentionCount] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
+  const lastReviewCount = useRef(0);
   const [newLeadCountError, setNewLeadCountError] = useState("");
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
     () => typeof Notification === "undefined" ? "unsupported" : Notification.permission,
@@ -191,6 +195,33 @@ export function AdminLayout() {
     };
     void refreshCount();
     const interval = window.setInterval(() => void refreshCount(), 15_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [authenticated, toast]);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    let active = true;
+    const refreshReviews = async () => {
+      try {
+        const counts = await getReviewCount();
+        if (!active) return;
+        setReviewCount(counts.unreadCount);
+        if (counts.unreadCount > lastReviewCount.current) {
+          toast(
+            `${counts.unreadCount} new product ${counts.unreadCount === 1 ? "review needs" : "reviews need"} attention.`,
+            "warn",
+          );
+        }
+        lastReviewCount.current = counts.unreadCount;
+      } catch (error) {
+        console.error("Could not check for new reviews:", error);
+      }
+    };
+    void refreshReviews();
+    const interval = window.setInterval(() => void refreshReviews(), 30_000);
     return () => {
       active = false;
       window.clearInterval(interval);
@@ -273,6 +304,11 @@ export function AdminLayout() {
                   overdueLeadCount > 0 ? "animate-pulse bg-coral" : "bg-sun"
                 }`}>
                   {attentionCount > 99 ? "99+" : attentionCount}
+                </span>
+              )}
+              {item.to === "/admin/reviews" && reviewCount > 0 && (
+                <span className="ml-auto min-w-5 rounded-full bg-violet-400 px-1.5 py-0.5 text-center text-[9px] font-bold text-ink-950">
+                  {reviewCount > 99 ? "99+" : reviewCount}
                 </span>
               )}
             </NavLink>
@@ -369,6 +405,11 @@ export function AdminLayout() {
                   overdueLeadCount > 0 ? "animate-pulse bg-coral" : "bg-sun"
                 }`}>
                   {attentionCount > 99 ? "99+" : attentionCount}
+                </span>
+              )}
+              {item.to === "/admin/reviews" && reviewCount > 0 && (
+                <span className="rounded-full bg-violet-400 px-1.5 py-0.5 text-[9px] font-bold text-ink-950">
+                  {reviewCount > 99 ? "99+" : reviewCount}
                 </span>
               )}
             </NavLink>

@@ -88,7 +88,116 @@ export type Order = {
   uid?: string;
   createdAt: string;
   updatedAt?: string;
+  trackingNumber?: string | null;
+  courierSlug?: string | null;
+  trackingSyncedAt?: string | null;
   items: OrderItem[];
+};
+
+export type ShipmentState =
+  | "pending"
+  | "in_transit"
+  | "out_for_delivery"
+  | "delivered"
+  | "exception"
+  | "unknown";
+
+export type TrackingCheckpoint = {
+  at: string;
+  location: string;
+  status: string;
+  rawStatus?: string;
+};
+
+/** Live courier position for one order, served by /api/customer/orders/:n/tracking. */
+export type OrderTracking = {
+  configured: boolean;
+  apiReady: boolean;
+  courier: string;
+  courierName: string;
+  trackingNumber: string;
+  state: ShipmentState;
+  statusLabel: string;
+  mostRecentStatus: string;
+  estimatedDelivery: string | null;
+  originCity: string | null;
+  destinationCity: string | null;
+  checkpoints: TrackingCheckpoint[];
+  syncedAt: string | null;
+  stale: boolean;
+  message: string;
+};
+
+export type ProductReview = {
+  id: string;
+  productId: string;
+  productName?: string;
+  productSlug?: string;
+  customerCode?: string | null;
+  authorName: string;
+  isAdmin: boolean;
+  rating: number | null;
+  title: string;
+  body: string;
+  adminReply: string | null;
+  adminReplyBy?: string | null;
+  adminRepliedAt: string | null;
+  status?: "published" | "hidden";
+  adminSeen?: boolean;
+  createdAt: string;
+};
+
+export type ReviewSummary = {
+  average: number;
+  count: number;
+  distribution: Record<"1" | "2" | "3" | "4" | "5", number>;
+};
+
+export type CustomerNotification = {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  link: string | null;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export type CustomerTransaction = {
+  id: string;
+  orderNumber: string;
+  kind: string;
+  paymentStatus: PaymentStatus;
+  orderStatus: OrderStatus;
+  amount: number;
+  paymentId?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+};
+
+export type CustomerTransactions = {
+  summary: {
+    orderCount: number;
+    paidOrders: number;
+    pendingOrders: number;
+    refundedOrders: number;
+    totalSpend: number;
+    lastOrderAt: string | null;
+  };
+  transactions: CustomerTransaction[];
+};
+
+export type CustomerProfile = {
+  code: string;
+  name: string;
+  email: string | null;
+  phone: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  marketingOptIn: boolean;
+  joinedAt?: string | null;
 };
 
 export type Prize = {

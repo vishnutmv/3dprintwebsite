@@ -13,6 +13,7 @@ const Dashboard = lazy(() => import("./admin/Dashboard").then((module) => ({ def
 const AdminProducts = lazy(() => import("./admin/AdminProducts").then((module) => ({ default: module.AdminProducts })));
 const AdminOrders = lazy(() => import("./admin/AdminOrders").then((module) => ({ default: module.AdminOrders })));
 const AdminCustomers = lazy(() => import("./admin/AdminCustomers").then((module) => ({ default: module.AdminCustomers })));
+const AdminReviews = lazy(() => import("./admin/AdminReviews").then((module) => ({ default: module.AdminReviews })));
 const AdminLeads = lazy(() => import("./admin/AdminLeads").then((module) => ({ default: module.AdminLeads })));
 const AdminPrizes = lazy(() => import("./admin/AdminPrizes").then((module) => ({ default: module.AdminPrizes })));
 const AdminCollaborators = lazy(() => import("./admin/AdminCollaborators").then((module) => ({ default: module.AdminCollaborators })));
@@ -70,6 +71,7 @@ const router = createBrowserRouter([
       { path: "products", element: page(<AdminProducts />) },
       { path: "orders", element: page(<AdminOrders />) },
       { path: "customers", element: page(<AdminCustomers />) },
+      { path: "reviews", element: page(<AdminReviews />) },
       { path: "leads", element: page(<AdminLeads />) },
       { path: "prizes", element: page(<AdminPrizes />) },
       { path: "collaborators", element: page(<AdminCollaborators />) },

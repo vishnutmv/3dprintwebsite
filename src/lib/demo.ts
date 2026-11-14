@@ -1,4 +1,4 @@
-import type { Order, Prize, Product, StoreSettings } from "./types";
+import type { CustomerNotification, Order, Prize, Product, ProductReview, StoreSettings } from "./types";
 import { newCustomerId, newOrderId } from "./format";
 
 const DEMO_DB_KEY = "3dp-client-demo-v1";
@@ -100,6 +100,12 @@ type DemoWhatsAppMessage = {
   body: string;
   createdAt: string;
 };
+type DemoReview = ProductReview & {
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+};
+type DemoFavorite = { customerCode: string; productId: string; createdAt: string };
+type DemoNotification = CustomerNotification & { customerCode: string };
 type DemoDb = {
   products: DemoProduct[];
   orders: DemoOrder[];
@@ -110,6 +116,10 @@ type DemoDb = {
   campaigns: DemoCampaign[];
   rewardTokens: DemoRewardToken[];
   collaborators: DemoCollaborator[];
+  accounts: DemoCustomer[];
+  reviews: DemoReview[];
+  favorites: DemoFavorite[];
+  notifications: DemoNotification[];
   settings: StoreSettings;
 };
 
@@ -201,7 +211,41 @@ function seedDemoDb(): DemoDb {
     { id: "demo-r-03", title: "Filament Starter Pack", description: "A sample reward bundle for an upcoming partner campaign.", prizeType: "product", tier: "regular", worth: 79900, sponsor: "Partner preview", cycle: "Sample campaign", status: "open", active: true, quantity: 1, createdAt: daysAgo(9) },
   ];
 
-  return { products, orders: sampleOrders, prizes, assignments: [], leads: [], whatsappMessages: [], campaigns: [], rewardTokens: [], collaborators: [], settings: { ...demoSettings } };
+  const reviews: DemoReview[] = [
+    {
+      id: "demo-rev-01", productId: "demo-p-01", productName: "Articulated Desk Dragon", productSlug: "articulated-dragon",
+      customerCode: "11112026K4M29XQPAB", authorName: "Aarav Menon", isAdmin: false, rating: 5, title: "Better than the photos",
+      body: "The joints move smoothly and it survived a week on my desk. Packaging was excellent.",
+      adminReply: "Thank you Aarav! Glad the joints held up — enjoy the dragon.", adminReplyBy: "admin@3dprintco.in",
+      adminRepliedAt: daysAgo(1), status: "published", adminSeen: true, createdAt: daysAgo(2),
+    },
+    {
+      id: "demo-rev-02", productId: "demo-p-02", productName: "Modular Desk Organiser", productSlug: "modular-desk-organiser",
+      customerCode: "09112026P7N3B6TAQ9", authorName: "Diya Raman", isAdmin: false, rating: 4, title: "Great finish",
+      body: "Lovely matte finish and the modules fit tightly. Would like one more pen slot option.",
+      adminReply: null, adminRepliedAt: null, status: "published", adminSeen: false, createdAt: daysAgo(3),
+    },
+    {
+      id: "demo-rev-03", productId: "demo-p-04", productName: "Ripple Mini Planter", productSlug: "ripple-mini-planter",
+      customerCode: "07112026H8V5Q2LMN4", authorName: "Kabir Shah", isAdmin: false, rating: 5, title: "Gift-worthy",
+      body: "Bought this as a gift and ended up ordering a second one for myself.",
+      adminReply: null, adminRepliedAt: null, status: "published", adminSeen: false, createdAt: daysAgo(5),
+    },
+  ];
+  sampleOrders[1].courierSlug = "dtdc";
+  sampleOrders[1].trackingNumber = "DEMO123456";
+
+  return {
+    products, orders: sampleOrders, prizes, assignments: [], leads: [], whatsappMessages: [],
+    campaigns: [], rewardTokens: [], collaborators: [], accounts: [], reviews,
+    favorites: [{ customerCode: "11112026K4M29XQPAB", productId: "demo-p-04", createdAt: daysAgo(1) }],
+    notifications: [{
+      id: "demo-note-01", customerCode: "11112026K4M29XQPAB", kind: "order_status",
+      title: "Order delivered", body: "Your articulated dragon was delivered. We hope you love it!",
+      link: "/account?tab=orders", readAt: null, createdAt: daysAgo(1),
+    }],
+    settings: { ...demoSettings },
+  };
 }
 
 function readDb(): DemoDb {
@@ -225,6 +269,10 @@ function readDb(): DemoDb {
     campaigns: Array.isArray((parsed as Partial<DemoDb>).campaigns) ? (parsed as DemoDb).campaigns : [],
     rewardTokens: Array.isArray((parsed as Partial<DemoDb>).rewardTokens) ? (parsed as DemoDb).rewardTokens : [],
     collaborators: Array.isArray((parsed as Partial<DemoDb>).collaborators) ? (parsed as DemoDb).collaborators : [],
+    accounts: Array.isArray((parsed as Partial<DemoDb>).accounts) ? (parsed as DemoDb).accounts : [],
+    reviews: Array.isArray((parsed as Partial<DemoDb>).reviews) ? (parsed as DemoDb).reviews : [],
+    favorites: Array.isArray((parsed as Partial<DemoDb>).favorites) ? (parsed as DemoDb).favorites : [],
+    notifications: Array.isArray((parsed as Partial<DemoDb>).notifications) ? (parsed as DemoDb).notifications : [],
   };
 }
 
@@ -283,8 +331,9 @@ function demoPhoneDigits(value: string): string {
 function demoCustomerSession(db: DemoDb, phone: string) {
   const digits = demoPhoneDigits(phone);
   if (digits.length !== 10) return null;
+  const account = db.accounts.find((item) => demoPhoneDigits(item.phone) === digits);
   const orders = db.orders.filter((order) => demoPhoneDigits(order.phone) === digits);
-  const customer = customersFrom(orders)[0];
+  const customer = account ?? customersFrom(orders)[0];
   if (!customer) return null;
   return {
     customer: {
@@ -292,12 +341,57 @@ function demoCustomerSession(db: DemoDb, phone: string) {
       name: customer.name,
       email: customer.email,
       phone: customer.phone,
+      address: customer.address,
       city: customer.city,
       state: customer.state,
       postalCode: customer.postalCode,
+      marketingOptIn: customer.marketingOptIn,
+      joinedAt: customer.joinedAt,
     },
     orders,
   };
+}
+
+function demoCurrentCode(db: DemoDb): string {
+  const phone = localStorage.getItem(DEMO_CUSTOMER_SESSION_KEY) ?? "";
+  const session = phone ? demoCustomerSession(db, phone) : null;
+  if (!session) badRequest("Sign in with your WhatsApp number to view your profile.", 401);
+  return session.customer.code;
+}
+
+function demoNotify(db: DemoDb, customerCode: string, kind: string, title: string, body: string, link: string | null) {
+  const notification: DemoNotification = {
+    id: `demo-note-${crypto.randomUUID()}`,
+    customerCode,
+    kind,
+    title,
+    body,
+    link,
+    readAt: null,
+    createdAt: new Date().toISOString(),
+  };
+  db.notifications.unshift(notification);
+  return notification;
+}
+
+function demoReviewSummary(db: DemoDb, productId: string) {
+  const distribution = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 } as Record<"1" | "2" | "3" | "4" | "5", number>;
+  const rated = db.reviews.filter((review) => review.productId === productId && review.status !== "hidden" && review.rating !== null);
+  let sum = 0;
+  for (const review of rated) {
+    const star = Math.max(1, Math.min(5, review.rating ?? 0)) as 1 | 2 | 3 | 4 | 5;
+    distribution[String(star) as keyof typeof distribution]++;
+    sum += star;
+  }
+  return {
+    average: rated.length ? Math.round((sum / rated.length) * 100) / 100 : 0,
+    count: rated.length,
+    distribution,
+  };
+}
+
+function demoReviewsForProduct(db: DemoDb, product: DemoProduct): DemoReview[] {
+  return db.reviews.filter((review) => review.productId === product.id);
 }
 
 function productSales(db: DemoDb, product: DemoProduct): DemoProduct {
@@ -462,6 +556,229 @@ export async function demoApiRequest<T>(
     localStorage.removeItem(DEMO_CUSTOMER_SESSION_KEY);
     return jsonResponse({ ok: true }) as T;
   }
+  if (route === "/api/customer/register" && method === "POST") {
+    const name = String(payload.name ?? "").trim();
+    const email = String(payload.email ?? "").trim().toLowerCase();
+    const phone = String(payload.phone ?? "").trim();
+    if (name.length < 2 || !email.includes("@") || demoPhoneDigits(phone).length !== 10) {
+      badRequest("Enter your name, email and a valid mobile number.");
+    }
+    if (demoCustomerSession(db, phone)) badRequest("This number already has an account. Sign in instead.", 409);
+    const account: DemoCustomer = {
+      id: `demo-c-${crypto.randomUUID()}`,
+      customerCode: newCustomerId(),
+      name,
+      fullName: name,
+      email,
+      phone,
+      city: "",
+      state: "Tamil Nadu",
+      postalCode: "",
+      address: "",
+      orders: 0,
+      paidOrders: 0,
+      spend: 0,
+      marketingOptIn: false,
+      joinedAt: new Date().toISOString(),
+    };
+    db.accounts.push(account);
+    demoNotify(db, account.customerCode, "account", "Welcome to the store", "Your customer account is ready. Complete your address in the profile tab before checking out.", "/account?tab=profile");
+    writeDb(db);
+    return jsonResponse({ customer: account, message: "Account created. Request a WhatsApp code to sign in." }) as T;
+  }
+  if (route === "/api/customer/profile" && method === "PATCH") {
+    const session = demoCustomerSession(db, localStorage.getItem(DEMO_CUSTOMER_SESSION_KEY) ?? "");
+    if (!session) badRequest("Sign in with your WhatsApp number to view your profile.", 401);
+    const updates = {
+      name: String(payload.name ?? session.customer.name).trim(),
+      email: String(payload.email ?? session.customer.email).trim(),
+      phone: String(payload.phone ?? session.customer.phone).trim(),
+      address: String(payload.address ?? session.customer.address ?? ""),
+      city: String(payload.city ?? session.customer.city ?? ""),
+      postalCode: String(payload.postalCode ?? session.customer.postalCode ?? ""),
+      marketingOptIn: Boolean(payload.marketingOptIn ?? session.customer.marketingOptIn),
+    };
+    if (updates.name.length < 2) badRequest("Please enter your full name.");
+    const account = db.accounts.find((item) => item.customerCode === session.customer.code);
+    if (account) {
+      Object.assign(account, {
+        name: updates.name, fullName: updates.name, email: updates.email, phone: updates.phone,
+        address: updates.address, city: updates.city, postalCode: updates.postalCode,
+        marketingOptIn: updates.marketingOptIn,
+      });
+    }
+    for (const order of db.orders) {
+      if (order.customerCode !== session.customer.code) continue;
+      order.customerName = updates.name;
+      order.email = updates.email;
+      order.phone = updates.phone;
+      order.address = updates.address;
+      order.city = updates.city;
+      order.pin = updates.postalCode;
+      order.postalCode = updates.postalCode;
+    }
+    localStorage.setItem(DEMO_CUSTOMER_SESSION_KEY, demoPhoneDigits(updates.phone));
+    writeDb(db);
+    const updated = demoCustomerSession(db, updates.phone);
+    if (!updated) badRequest("Could not save the profile.", 500);
+    return jsonResponse(updated) as T;
+  }
+
+  const reviewRouteMatch = route.match(/^\/api\/products\/([^/]+)\/reviews$/);
+  if (reviewRouteMatch) {
+    const reference = decodeURIComponent(reviewRouteMatch[1]);
+    const product = db.products.find((item) => item.id === reference || item.slug === reference);
+    if (!product) badRequest("Product not found.", 404);
+    if (method === "GET") {
+      return jsonResponse({
+        reviews: demoReviewsForProduct(db, product).filter((review) => review.status !== "hidden"),
+        summary: demoReviewSummary(db, product.id),
+        adminName: import.meta.env.VITE_DEMO_ADMIN_EMAIL || "admin@3dprintco.in",
+      }) as T;
+    }
+    if (method === "POST") {
+      const code = demoCurrentCode(db);
+      const rating = Number(payload.rating);
+      const body = String(payload.body ?? "").trim();
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) badRequest("Choose a rating from 1 to 5 stars.");
+      if (body.length < 4) badRequest("Write a sentence or two about the product.");
+      if (db.reviews.some((review) => review.productId === product.id && review.customerCode === code)) {
+        badRequest("You have already reviewed this product.", 409);
+      }
+      const customer = customersFrom(db.orders).find((item) => item.customerCode === code)
+        ?? db.accounts.find((item) => item.customerCode === code);
+      const review: DemoReview = {
+        id: `demo-rev-${crypto.randomUUID()}`,
+        productId: product.id,
+        productName: product.name,
+        productSlug: product.slug,
+        customerCode: code,
+        authorName: customer?.name ?? "Customer",
+        isAdmin: false,
+        rating,
+        title: String(payload.title ?? ""),
+        body,
+        adminReply: null,
+        adminRepliedAt: null,
+        status: "published",
+        adminSeen: false,
+        createdAt: new Date().toISOString(),
+      };
+      db.reviews.unshift(review);
+      demoNotify(db, code, "review", "Thanks for your review", `Your review of ${product.name} is live. The studio is notified and can reply.`, `/product/${product.slug}`);
+      writeDb(db);
+      return jsonResponse({ review, summary: demoReviewSummary(db, product.id) }) as T;
+    }
+  }
+  if (route === "/api/reviews" && method === "GET") {
+    const featured = url.searchParams.get("featured") === "1";
+    const limit = Number(url.searchParams.get("limit") ?? 8);
+    return jsonResponse({
+      reviews: db.reviews
+        .filter((review) => review.status !== "hidden" && review.body.trim() !== "" && (!featured || (review.rating ?? 0) >= 4))
+        .slice(0, Number.isFinite(limit) ? limit : 8),
+    }) as T;
+  }
+
+  if (route === "/api/customer/favorites" && (method === "GET" || method === "POST")) {
+    const code = demoCurrentCode(db);
+    if (method === "POST") {
+      const productId = String(payload.productId ?? "");
+      if (!db.products.some((product) => product.id === productId && product.active)) badRequest("Product not found.", 404);
+      if (!db.favorites.some((item) => item.customerCode === code && item.productId === productId)) {
+        db.favorites.unshift({ customerCode: code, productId, createdAt: new Date().toISOString() });
+        writeDb(db);
+      }
+    }
+    const saved = db.favorites.filter((item) => item.customerCode === code);
+    const ids = saved.map((item) => item.productId);
+    return jsonResponse({
+      productIds: ids,
+      products: ids.flatMap((id) => {
+        const product = db.products.find((item) => item.id === id && item.active);
+        return product ? [productSales(db, product)] : [];
+      }),
+    }) as T;
+  }
+  const favoriteDelete = route.match(/^\/api\/customer\/favorites\/([^/]+)$/);
+  if (favoriteDelete && method === "DELETE") {
+    const code = demoCurrentCode(db);
+    const productId = decodeURIComponent(favoriteDelete[1]);
+    db.favorites = db.favorites.filter((item) => !(item.customerCode === code && item.productId === productId));
+    writeDb(db);
+    const saved = db.favorites.filter((item) => item.customerCode === code);
+    const ids = saved.map((item) => item.productId);
+    return jsonResponse({
+      productIds: ids,
+      products: ids.flatMap((id) => {
+        const product = db.products.find((item) => item.id === id && item.active);
+        return product ? [productSales(db, product)] : [];
+      }),
+    }) as T;
+  }
+
+  if (route === "/api/customer/notifications" && method === "GET") {
+    const code = demoCurrentCode(db);
+    const notifications = db.notifications.filter((item) => item.customerCode === code);
+    return jsonResponse({ notifications, unreadCount: notifications.filter((item) => !item.readAt).length }) as T;
+  }
+  if (route === "/api/customer/notifications/read" && method === "POST") {
+    const code = demoCurrentCode(db);
+    for (const notification of db.notifications) {
+      if (notification.customerCode === code) notification.readAt = notification.readAt ?? new Date().toISOString();
+    }
+    writeDb(db);
+    const notifications = db.notifications.filter((item) => item.customerCode === code);
+    return jsonResponse({ notifications, unreadCount: 0 }) as T;
+  }
+  if (route === "/api/customer/transactions" && method === "GET") {
+    const code = demoCurrentCode(db);
+    const orders = db.orders.filter((order) => order.customerCode === code);
+    const paid = orders.filter((order) => order.paymentStatus === "paid");
+    return jsonResponse({
+      summary: {
+        orderCount: orders.length,
+        paidOrders: paid.length,
+        pendingOrders: orders.filter((order) => order.paymentStatus === "pending").length,
+        refundedOrders: orders.filter((order) => order.paymentStatus === "refunded").length,
+        totalSpend: paid.reduce((sum, order) => sum + order.total, 0),
+        lastOrderAt: orders[0]?.createdAt ?? null,
+      },
+      transactions: orders.map((order) => ({
+        id: order.id, orderNumber: order.orderNumber, kind: "order",
+        paymentStatus: order.paymentStatus, orderStatus: order.orderStatus,
+        amount: order.total, paymentId: order.paymentId ?? null,
+        createdAt: order.createdAt, updatedAt: order.updatedAt ?? null,
+      })),
+    }) as T;
+  }
+  const demoTrackingMatch = route.match(/^\/api\/customer\/orders\/([^/]+)\/tracking$/);
+  if (demoTrackingMatch && method === "GET") {
+    const number = decodeURIComponent(demoTrackingMatch[1]);
+    const order = db.orders.find((item) => item.orderNumber === number);
+    if (!order) badRequest("Order not found.", 404);
+    const configured = Boolean(order.courierSlug && order.trackingNumber);
+    return jsonResponse({ tracking: {
+      configured,
+      apiReady: false,
+      courier: order.courierSlug ?? "",
+      courierName: order.courierSlug ? order.courierSlug.toUpperCase() : "",
+      trackingNumber: order.trackingNumber ?? "",
+      state: configured ? "in_transit" : "unknown",
+      statusLabel: configured ? "In transit" : "Not shipped yet",
+      mostRecentStatus: configured ? "Shipment picked up and moving through the DTDC network." : "",
+      estimatedDelivery: null,
+      originCity: "Chennai",
+      destinationCity: order.city,
+      checkpoints: configured ? [
+        { at: new Date(Date.now() - 26 * 3_600_000).toISOString(), location: "Chennai", status: "Shipment picked up", rawStatus: "picked" },
+        { at: new Date(Date.now() - 8 * 3_600_000).toISOString(), location: "Sriperumbudur hub", status: "Reached sorting hub", rawStatus: "in_transit" },
+      ] : [],
+      syncedAt: new Date().toISOString(),
+      stale: false,
+      message: configured ? "Demo preview data. Live TrackCourier updates appear in production." : "The courier and tracking number are added once your parcel is handed over.",
+    } }) as T;
+  }
 
   if (route === "/api/orders" && method === "POST") {
     const contact = payload.contact as Record<string, unknown> | undefined;
@@ -490,8 +807,10 @@ export async function demoApiRequest<T>(
     const shipping = subtotal >= db.settings.freeShippingOver ? 0 : db.settings.shippingFlat;
     const digits = phone.replace(/\D/g, "").slice(-10);
     const previous = db.orders.find((order) => order.phone.replace(/\D/g, "").slice(-10) === digits);
-    const customerCode = previous?.customerCode ?? newCustomerId();
-    const customerId = previous?.customerId ?? customerCode;
+    const sessionPhone = localStorage.getItem(DEMO_CUSTOMER_SESSION_KEY) ?? "";
+    const signedIn = sessionPhone ? demoCustomerSession(db, sessionPhone)?.customer : null;
+    const customerCode = signedIn?.code ?? previous?.customerCode ?? newCustomerId();
+    const customerId = signedIn?.code ?? previous?.customerId ?? customerCode;
     const now = new Date().toISOString();
     const orderNumber = newOrderId();
     const order: DemoOrder = {
@@ -526,6 +845,7 @@ export async function demoApiRequest<T>(
       })),
     };
     db.orders.unshift(order);
+    demoNotify(db, customerCode, "order", `Order ${orderNumber} received`, `We saved your order for ₹${(order.total / 100).toFixed(2)}.`, "/account?tab=orders");
     writeDb(db);
     return jsonResponse({
       order,
@@ -687,6 +1007,84 @@ export async function demoApiRequest<T>(
     if (q) orders = orders.filter((order) => `${order.orderNumber} ${order.customerName} ${order.phone} ${order.customerCode}`.toLowerCase().includes(q));
     return jsonResponse({ orders }) as T;
   }
+  const demoShipmentMatch = route.match(/^\/api\/admin\/orders\/([^/]+)\/shipment$/);
+  if (demoShipmentMatch && method === "PATCH") {
+    const order = db.orders.find((item) => item.orderNumber === decodeURIComponent(demoShipmentMatch[1]));
+    if (!order) badRequest("Order not found.", 404);
+    const courier = String(payload.courier ?? "").toLowerCase().trim();
+    const trackingNumber = String(payload.trackingNumber ?? "").toUpperCase().trim();
+    if (!courier && !trackingNumber) {
+      order.courierSlug = null;
+      order.trackingNumber = null;
+      order.trackingSyncedAt = null;
+    } else if (!courier || !trackingNumber) {
+      badRequest("Enter both the courier and the tracking number.");
+    } else {
+      order.courierSlug = courier;
+      order.trackingNumber = trackingNumber;
+      order.trackingSyncedAt = new Date().toISOString();
+      demoNotify(db, order.customerCode, "tracking", `Tracking added for ${order.orderNumber}`, `AWB ${trackingNumber}. Follow the live timeline in your profile.`, "/account?tab=orders");
+    }
+    writeDb(db);
+    return jsonResponse({ order }) as T;
+  }
+
+  if (route === "/api/admin/reviews/count" && method === "GET") {
+    const rated = db.reviews.filter((review) => review.status !== "hidden" && review.rating !== null);
+    return jsonResponse({
+      unreadCount: db.reviews.filter((review) => !review.isAdmin && !review.adminSeen).length,
+      total: db.reviews.filter((review) => review.status !== "hidden").length,
+      averageRating: rated.length ? rated.reduce((sum, review) => sum + (review.rating ?? 0), 0) / rated.length : 0,
+    }) as T;
+  }
+  if (route === "/api/admin/reviews" && method === "GET") {
+    const reviews = [...db.reviews];
+    const adminName = import.meta.env.VITE_DEMO_ADMIN_EMAIL || "admin@3dprintco.in";
+    for (const review of reviews) {
+      if (!review.isAdmin) review.adminSeen = true;
+      const customer = customersFrom(db.orders).find((item) => item.customerCode === review.customerCode)
+        ?? db.accounts.find((item) => item.customerCode === review.customerCode);
+      review.customerPhone = customer?.phone ?? null;
+      review.customerEmail = customer?.email ?? null;
+    }
+    writeDb(db);
+    return jsonResponse({ reviews, unreadCount: 0, adminName }) as T;
+  }
+  const demoReviewReply = route.match(/^\/api\/admin\/reviews\/([^/]+)\/reply$/);
+  if (demoReviewReply && method === "POST") {
+    const review = db.reviews.find((item) => item.id === decodeURIComponent(demoReviewReply[1]));
+    if (!review) badRequest("Review not found.", 404);
+    const reply = String(payload.reply ?? "").trim();
+    if (reply.length < 2) badRequest("Write a reply before sending it.");
+    review.adminReply = reply;
+    review.adminReplyBy = import.meta.env.VITE_DEMO_ADMIN_EMAIL || "admin@3dprintco.in";
+    review.adminRepliedAt = new Date().toISOString();
+    review.adminSeen = true;
+    if (review.customerCode) {
+      demoNotify(db, review.customerCode, "review_reply", "The studio replied to your review", `${reply} — ${review.adminReplyBy}`, `/product/${review.productSlug ?? ""}`);
+    }
+    writeDb(db);
+    return jsonResponse({ review, notifications: { whatsapp: "not_configured" } }) as T;
+  }
+  const demoReviewMatch = route.match(/^\/api\/admin\/reviews\/([^/]+)$/);
+  if (demoReviewMatch) {
+    const id = decodeURIComponent(demoReviewMatch[1]);
+    const review = db.reviews.find((item) => item.id === id);
+    if (!review) badRequest("Review not found.", 404);
+    if (method === "DELETE") {
+      db.reviews = db.reviews.filter((item) => item.id !== id);
+      writeDb(db);
+      return jsonResponse({ ok: true }) as T;
+    }
+    if (method === "PATCH") {
+      const status = String(payload.status ?? "published");
+      if (!["published", "hidden"].includes(status)) badRequest("Choose published or hidden.");
+      review.status = status as "published" | "hidden";
+      writeDb(db);
+      return jsonResponse({ ok: true }) as T;
+    }
+  }
+
   const adminOrderMatch = route.match(/^\/api\/admin\/orders\/([^/]+)$/);
   if (adminOrderMatch && method === "PATCH") {
     const orderNumber = decodeURIComponent(adminOrderMatch[1]);

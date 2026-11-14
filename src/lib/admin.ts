@@ -5,7 +5,7 @@
 
 import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from "./api";
 import { useAdminAuth } from "./auth";
-import type { Order, Prize, Product, StoreSettings } from "./types";
+import type { Order, Prize, Product, ProductReview, StoreSettings } from "./types";
 
 export type AdminProduct = Product & {
   active: boolean;
@@ -74,6 +74,30 @@ export type WhatsAppMessage = {
 };
 
 export type AdminOrder = Order;
+
+export type AdminReview = ProductReview & {
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+};
+
+export const TRACKING_COURIERS = [
+  { slug: "delhivery", name: "Delhivery" },
+  { slug: "dtdc", name: "DTDC" },
+  { slug: "bluedart", name: "Blue Dart" },
+  { slug: "speedpost", name: "Speed Post" },
+  { slug: "indiapost", name: "India Post" },
+  { slug: "xpressbees", name: "XpressBees" },
+  { slug: "ekart", name: "Ekart Logistics" },
+  { slug: "shadowfax", name: "Shadowfax" },
+  { slug: "professional", name: "Professional Courier" },
+  { slug: "trackon", name: "Trackon Courier" },
+  { slug: "shreetirupati", name: "Shree Tirupati Courier" },
+  { slug: "stcourier", name: "ST Courier" },
+  { slug: "shreemaruti", name: "Shree Maruti" },
+  { slug: "gati", name: "Gati" },
+  { slug: "shiprocket", name: "Shiprocket" },
+  { slug: "vrl", name: "VRL Logistics" },
+] as const;
 
 export type AdminAssignment = {
   id: string;
@@ -360,6 +384,42 @@ export async function updateOrderStatus(
     { orderStatus },
   );
   return response;
+}
+
+export async function updateOrderShipment(
+  orderNumber: string,
+  shipment: { courier: string; trackingNumber: string },
+): Promise<AdminOrder> {
+  const response = await adminPatch<{ order: AdminOrder }>(
+    `/api/admin/orders/${encodeURIComponent(orderNumber)}/shipment`,
+    shipment,
+  );
+  return response.order;
+}
+
+/* ---------------------------- Reviews ------------------------------ */
+
+export async function getReviews(): Promise<{ reviews: AdminReview[]; unreadCount: number; adminName: string }> {
+  return adminGet("/api/admin/reviews");
+}
+
+export async function getReviewCount(): Promise<{ unreadCount: number; total: number; averageRating: number }> {
+  return adminGet("/api/admin/reviews/count");
+}
+
+export async function replyToReview(
+  id: string,
+  reply: string,
+): Promise<{ review: AdminReview | null; notifications: { whatsapp: string } }> {
+  return adminPost(`/api/admin/reviews/${encodeURIComponent(id)}/reply`, { reply });
+}
+
+export function setReviewStatus(id: string, status: "published" | "hidden"): Promise<{ ok: boolean }> {
+  return adminPatch(`/api/admin/reviews/${encodeURIComponent(id)}`, { status });
+}
+
+export function deleteReview(id: string): Promise<{ ok: boolean }> {
+  return adminDelete(`/api/admin/reviews/${encodeURIComponent(id)}`);
 }
 
 /* --------------------------- Customers ----------------------------- */

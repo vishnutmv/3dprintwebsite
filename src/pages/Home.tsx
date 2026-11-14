@@ -6,6 +6,8 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Gift, Sparkles } from "lucide-react";
 import { ProductCard } from "@/components/ProductCard";
 import { PromotionBanner } from "@/components/PromotionBanner";
+import { StorePromos } from "@/components/StorePromos";
+import { Testimonials } from "@/components/Testimonials";
 import { inr } from "@/lib/format";
 import { effectiveProductPrice, usePromotionClock } from "@/lib/promotions";
 import { useStore } from "@/lib/store";
@@ -111,6 +113,7 @@ export function Home() {
       </section>
 
       <PromotionBanner products={products} />
+      <StorePromos />
 
       {/* Catalogue */}
       <section className="mt-12">
@@ -164,6 +167,8 @@ export function Home() {
           ))}
         </div>
       </section>
+
+      <Testimonials />
 
       {/* Rewards */}
       <section className="mt-8 grid gap-4 lg:grid-cols-[1.2fr_1fr]">

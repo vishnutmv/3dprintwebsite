@@ -3,13 +3,14 @@
  * order, then opens Razorpay TEST checkout. The browser never chooses the amount.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Loader2, Lock, ShieldCheck } from "lucide-react";
+import { Loader2, Lock, ShieldCheck, UserRound } from "lucide-react";
 import { inr } from "@/lib/format";
 import { ApiError, apiPost } from "@/lib/api";
 import { createPaymentSession, openRazorpayCheckout, verifyRazorpayPayment } from "@/lib/razorpay";
 import { rememberCustomerCode, rememberOrderCode } from "@/lib/customer";
+import { useAccount } from "@/lib/account";
 import { demoMode } from "@/lib/demo-mode";
 import { tamilNaduDistricts } from "@/lib/regions";
 import { usePromotionClock } from "@/lib/promotions";
@@ -36,15 +37,66 @@ export function Checkout() {
   const fetchProducts = useStore((state) => state.fetchProducts);
   const fetchSettings = useStore((state) => state.fetchSettings);
   const now = usePromotionClock();
+  const customer = useAccount((state) => state.customer);
+  const accountLoaded = useAccount((state) => state.loaded);
+  const refreshAccount = useAccount((state) => state.refresh);
+  const prefilled = useRef(false);
 
   const [contact, setContact] = useState<CheckoutContact>(emptyContact);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (!accountLoaded) void refreshAccount();
+  }, [accountLoaded, refreshAccount]);
+
+  useEffect(() => {
+    if (!customer || prefilled.current) return;
+    prefilled.current = true;
+    setContact({
+      name: customer.name ?? "",
+      email: customer.email ?? "",
+      phone: customer.phone ?? "",
+      address: customer.address ?? "",
+      city: customer.city && tamilNaduDistricts.includes(customer.city as (typeof tamilNaduDistricts)[number])
+        ? customer.city
+        : "Chennai",
+      state: "Tamil Nadu",
+      postalCode: customer.postalCode ?? "",
+      marketingOptIn: customer.marketingOptIn ?? false,
+    });
+  }, [customer]);
+
   const lines = cartLines({ cart, products }, now);
   const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
   const shipping = subtotal === 0 || subtotal >= settings.freeShippingOver ? 0 : settings.shippingFlat;
   const total = subtotal + shipping;
+
+  if (!accountLoaded) {
+    return (
+      <div className="mx-auto grid max-w-xl place-items-center px-4 py-28 text-center text-[12.5px] text-white/50">
+        <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" /> Checking your account…
+      </div>
+    );
+  }
+
+  if (!customer) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-28 text-center">
+        <UserRound className="mx-auto h-9 w-9 text-violet-300" />
+        <h1 className="mt-3 text-[26px]">Sign in to check out</h1>
+        <p className="mt-2 text-sm leading-relaxed text-white/50">
+          Orders, invoices, tracking and review notifications are tied to your customer account. Sign in or create an account to continue.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <Link to={`/account?next=${encodeURIComponent("/checkout")}`} className="btn-primary">
+            Sign in or create account
+          </Link>
+          <Link to="/shop" className="btn-glass">Back to shop</Link>
+        </div>
+      </div>
+    );
+  }
 
   if (lines.length === 0) {
     return (

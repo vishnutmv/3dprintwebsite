@@ -1,13 +1,14 @@
 /**
- * Site header — sticky glass bar with nav, cart count and admin entry.
- * The admin panel lives at /admin and is deliberately not linked in the main nav
- * beyond this small utility link.
+ * Site header — sticky bar with nav, greeting, favourites, notifications,
+ * cart count and admin entry. Favourites and alerts appear only when a
+ * customer is signed in.
  */
 
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { MessageCircle, ShieldCheck, ShoppingBag, UserRound } from "lucide-react";
+import { Bell, Heart, MessageCircle, ShieldCheck, ShoppingBag, UserRound } from "lucide-react";
 import { Logo } from "./Logo";
-import { rememberedCustomerCode } from "@/lib/customer";
+import { firstName, useAccount } from "@/lib/account";
+import { useSocial } from "@/lib/social";
 import { cn } from "@/lib/format";
 import { useStore } from "@/lib/store";
 
@@ -18,13 +19,13 @@ const nav = [
 ];
 
 export function SiteHeader() {
-  // Re-render on navigation so the profile entry appears after a sign-in.
+  // Re-render on navigation so active states stay in sync.
   useLocation();
   const cartCount = useStore((state) => state.cart.reduce((sum, item) => sum + item.qty, 0));
   const whatsappContactUrl = useStore((state) => state.settings.whatsappContactUrl);
-  // The profile entry unlocks after a first order, when this browser has a
-  // customer code. New visitors still reach it from the footer or after checkout.
-  const hasProfile = Boolean(rememberedCustomerCode());
+  const customer = useAccount((state) => state.customer);
+  const favoriteCount = useSocial((state) => state.favorites.length);
+  const unreadCount = useSocial((state) => state.unreadCount);
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-ink-950/70 backdrop-blur-xl">
@@ -53,6 +54,15 @@ export function SiteHeader() {
           </nav>
 
           <div className="flex items-center gap-1.5">
+            {customer && (
+              <Link
+                to="/account?tab=orders"
+                className="hidden max-w-[150px] items-center gap-2 rounded-xl px-2.5 text-[12px] font-semibold text-white/70 transition hover:bg-white/[0.06] hover:text-white lg:flex"
+                title={customer.name}
+              >
+                <span className="truncate">Hi, {firstName(customer.name)}</span>
+              </Link>
+            )}
             {whatsappContactUrl && (
               <a
                 href={whatsappContactUrl}
@@ -65,15 +75,41 @@ export function SiteHeader() {
                 <span className="hidden sm:inline">Enquire</span>
               </a>
             )}
-            {hasProfile && (
+            {customer && (
               <Link
-                to="/account"
-                className="grid h-9 w-9 place-items-center rounded-xl text-white/60 transition hover:bg-white/[0.06] hover:text-white"
-                aria-label="Customer profile"
+                to="/account?tab=favourites"
+                className="relative grid h-9 w-9 place-items-center rounded-xl text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+                aria-label={`Favourites, ${favoriteCount} saved`}
               >
-                <UserRound className="h-4 w-4" />
+                <Heart className="h-4 w-4" />
+                {favoriteCount > 0 && (
+                  <span className="num absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-coral px-1 text-[9.5px] font-bold text-white">
+                    {favoriteCount > 99 ? "99+" : favoriteCount}
+                  </span>
+                )}
               </Link>
             )}
+            {customer && (
+              <Link
+                to="/account?tab=notifications"
+                className="relative grid h-9 w-9 place-items-center rounded-xl text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+                aria-label={`Notifications, ${unreadCount} unread`}
+              >
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <span className="num absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-violet-400 px-1 text-[9.5px] font-bold text-ink-950">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+            )}
+            <Link
+              to="/account"
+              className="grid h-9 w-9 place-items-center rounded-xl text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+              aria-label={customer ? "Customer profile" : "Sign in"}
+            >
+              <UserRound className="h-4 w-4" />
+            </Link>
             <Link
               to="/cart"
               className="relative grid h-9 w-9 place-items-center rounded-xl text-white/60 transition hover:bg-white/[0.06] hover:text-white"
@@ -113,6 +149,17 @@ export function SiteHeader() {
               {item.label}
             </NavLink>
           ))}
+          <NavLink
+            to="/account"
+            className={({ isActive }) =>
+              cn(
+                "rounded-full px-4 py-1.5 text-[12px] font-semibold transition",
+                isActive ? "bg-white/[0.08] text-white" : "text-white/55 hover:text-white",
+              )
+            }
+          >
+            {customer ? firstName(customer.name) : "Sign in"}
+          </NavLink>
         </nav>
       </div>
     </header>

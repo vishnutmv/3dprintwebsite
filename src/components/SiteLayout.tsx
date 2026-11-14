@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Backdrop } from "./Backdrop";
 import { SiteHeader } from "./SiteHeader";
@@ -6,6 +6,9 @@ import { SiteFooter } from "./SiteFooter";
 import { ReturningCustomerPrompt } from "./ReturningCustomerPrompt";
 import { Toaster } from "./Toaster";
 import { useStore } from "@/lib/store";
+import { useAccount } from "@/lib/account";
+import { useSocial } from "@/lib/social";
+import { useToast } from "@/lib/toast";
 import { demoMode } from "@/lib/demo-mode";
 
 function ScrollToTop() {
@@ -27,10 +30,47 @@ function ScrollToTop() {
 
 export function SiteLayout() {
   const bootstrap = useStore((state) => state.bootstrap);
+  const customer = useAccount((state) => state.customer);
+  const accountLoaded = useAccount((state) => state.loaded);
+  const refreshAccount = useAccount((state) => state.refresh);
+  const loadedFor = useSocial((state) => state.loadedFor);
+  const fetchSocial = useSocial((state) => state.fetchSocial);
+  const pushToast = useToast((state) => state.push);
+  const lastUnread = useRef(0);
 
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
+
+  useEffect(() => {
+    if (!accountLoaded) void refreshAccount();
+  }, [accountLoaded, refreshAccount]);
+
+  useEffect(() => {
+    if (customer && loadedFor !== customer.code) void fetchSocial(customer.code);
+    if (!customer && loadedFor) useSocial.getState().reset();
+  }, [customer, fetchSocial, loadedFor]);
+
+  // Poll the customer inbox so order/status/review replies surface as an
+  // in-site alert while the storefront is open.
+  useEffect(() => {
+    if (!customer) {
+      lastUnread.current = 0;
+      return;
+    }
+    lastUnread.current = useSocial.getState().unreadCount;
+    const timer = window.setInterval(async () => {
+      if (document.hidden) return;
+      await useSocial.getState().refreshNotifications();
+      const state = useSocial.getState();
+      if (state.unreadCount > lastUnread.current) {
+        const latest = state.notifications.find((notification) => !notification.readAt);
+        if (latest) pushToast(`${latest.title}`, "success");
+      }
+      lastUnread.current = state.unreadCount;
+    }, 45_000);
+    return () => window.clearInterval(timer);
+  }, [customer, pushToast]);
 
   return (
     <>

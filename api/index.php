@@ -2,7 +2,9 @@
 declare(strict_types=1);
 
 require __DIR__ . '/_php/bootstrap.php';
+require __DIR__ . '/_php/tracking.php';
 require __DIR__ . '/_php/commerce.php';
+require __DIR__ . '/_php/social.php';
 require __DIR__ . '/_php/admin.php';
 require __DIR__ . '/_php/whatsapp.php';
 
@@ -30,6 +32,7 @@ $segments = $route === '' ? [] : array_map('rawurldecode', explode('/', $route))
 $path = implode('/', $segments);
 
 try {
+    if (handle_social($path, $segments)) exit;
     if (handle_admin($path, $segments)) exit;
     if (handle_whatsapp($path)) exit;
     if (handle_commerce($path, $segments)) exit;

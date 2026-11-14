@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Box, Check, Clock, Play, Ruler } from "lucide-react";
 import { ModelViewer } from "@/components/ModelViewer";
+import { ProductReviews } from "@/components/ProductReviews";
 import { inr } from "@/lib/format";
 import { effectiveProductPrice, promotionState, usePromotionClock } from "@/lib/promotions";
 import { useStore } from "@/lib/store";
@@ -230,6 +231,8 @@ export function ProductDetail() {
           </div>
         </div>
       </div>
+
+      <ProductReviews product={product} />
     </div>
   );
 }

@@ -23,6 +23,7 @@ return [
     'waapi_instance_id' => '',
     'waapi_api_token' => '',
     'customer_otp_secret' => '',
+    'trackcourier_api_key' => '',
     'waapi_webhook_secret' => '',
     'waapi_cron_secret' => '',
     'storefront_url' => '',

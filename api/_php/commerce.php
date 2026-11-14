@@ -99,6 +99,13 @@ function mark_paid(string $razorOrderId, string $paymentId): ?array
                 [$paymentId, $order['id']]
             );
             $customer = one('SELECT id, phone, full_name FROM customers WHERE id=?', [$order['customer_id']]);
+            if ($customer) add_customer_notification(
+                (string)$customer['id'],
+                'payment',
+                'Payment confirmed',
+                'We received ₹' . number_format((int)$order['total_amount'] / 100, 2) . ' for order ' . $order['order_number'] . '. Your order is now confirmed.',
+                '/account?tab=orders',
+            );
             if ($customer) link_whatsapp_leads_to_customer(
                 (string)$customer['id'],
                 (string)$customer['phone'],
@@ -244,19 +251,27 @@ function customer_otp_secret(): string
     return hash_hmac('sha256', '3dprintco-customer-otp-v1', $seed);
 }
 
+function customer_profile_out(array $customer): array
+{
+    return [
+        'code' => $customer['customer_code'],
+        'name' => $customer['full_name'],
+        'email' => $customer['email'],
+        'phone' => $customer['phone'],
+        'address' => $customer['delivery_address'],
+        'city' => $customer['city'],
+        'state' => $customer['state'],
+        'postalCode' => $customer['postal_code'],
+        'marketingOptIn' => (bool)($customer['marketing_opt_in'] ?? false),
+        'joinedAt' => utc_iso($customer['created_at'] ?? null),
+    ];
+}
+
 function customer_orders_response(array $customer): array
 {
     $orders = all('SELECT * FROM orders WHERE customer_id=? ORDER BY created_at DESC LIMIT 100', [$customer['id']]);
     return [
-        'customer' => [
-            'code' => $customer['customer_code'],
-            'name' => $customer['full_name'],
-            'email' => $customer['email'],
-            'phone' => $customer['phone'],
-            'city' => $customer['city'],
-            'state' => $customer['state'],
-            'postalCode' => $customer['postal_code'],
-        ],
+        'customer' => customer_profile_out($customer),
         'orders' => array_map(
             static fn(array $order): array => mapped_details(order_details($order['order_number'])),
             $orders,
@@ -268,6 +283,44 @@ function handle_commerce(string $path, array $parts): bool
 {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     global $config;
+    if ($path === 'customer/register' && $method === 'POST') {
+        rate_limit('customer-register', 5, 3600);
+        $input = body();
+        $name = text_value($input['name'] ?? '', 120);
+        $email = strtolower(text_value($input['email'] ?? '', 254));
+        $phone = normalize_indian_mobile(text_value($input['phone'] ?? '', 24));
+        if (mb_strlen($name) < 2) fail(400, 'Please enter your full name.');
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail(400, 'Please enter a valid email address.');
+        if ($phone === null) fail(400, 'Please enter a valid Indian mobile number.');
+        if (find_customer_for_login($phone)) fail(409, 'This number already has an account. Sign in with a WhatsApp code instead.');
+        if (one('SELECT id FROM customers WHERE email=?', [$email])) fail(409, 'That email address is already linked to an account. Sign in instead.');
+        $address = text_value($input['address'] ?? '', 500);
+        $city = text_value($input['city'] ?? '', 100);
+        $city = in_array($city, tamil_nadu_districts(), true) ? $city : '';
+        $pin = text_value($input['postalCode'] ?? $input['pin'] ?? '', 10);
+        if (!preg_match('/^6\d{5}$/', $pin)) $pin = '';
+        $customerId = new_id();
+        do {
+            $customerCode = customer_code();
+        } while (one('SELECT id FROM customers WHERE customer_code=?', [$customerCode]));
+        run(
+            'INSERT INTO customers (id,customer_code,full_name,email,phone,delivery_address,city,state,postal_code,marketing_opt_in) VALUES (?,?,?,?,?,?,?,?,?,?)',
+            [$customerId, $customerCode, $name, $email, $phone, $address ?: null, $city ?: null, $city !== '' ? 'Tamil Nadu' : null, $pin ?: null, !empty($input['marketingOptIn']) ? 1 : 0],
+        );
+        $customer = one('SELECT * FROM customers WHERE id=?', [$customerId]);
+        if (!$customer) fail(500, 'The account could not be created. Please try again.');
+        add_customer_notification(
+            $customerId,
+            'account',
+            'Welcome to the store',
+            'Your customer account is ready. Complete your address in the profile tab before checking out.',
+            '/account?tab=profile',
+        );
+        respond(201, [
+            'customer' => customer_profile_out($customer),
+            'message' => 'Account created. Request a WhatsApp code to sign in.',
+        ]);
+    }
     if ($path === 'customer/auth/request' && $method === 'POST') {
         rate_limit('customer-otp-request', 5, 600);
         $input = body();
@@ -399,6 +452,60 @@ function handle_commerce(string $path, array $parts): bool
     if ($path === 'customer/session' && $method === 'GET') {
         respond(200, customer_orders_response(customer_session_required()));
     }
+    if ($path === 'customer/me' && $method === 'GET') {
+        respond(200, ['customer' => customer_profile_out(customer_session_required())]);
+    }
+    if ($path === 'customer/profile' && $method === 'PATCH') {
+        rate_limit('customer-profile', 20, 600);
+        $customer = customer_session_required();
+        $input = body();
+        $name = text_value($input['name'] ?? $customer['full_name'], 120);
+        $email = strtolower(text_value($input['email'] ?? ($customer['email'] ?? ''), 254));
+        $phone = normalize_indian_mobile(text_value($input['phone'] ?? $customer['phone'], 24));
+        $address = text_value($input['address'] ?? ($customer['delivery_address'] ?? ''), 500);
+        $city = text_value($input['city'] ?? ($customer['city'] ?? ''), 100);
+        $pin = text_value($input['postalCode'] ?? $input['pin'] ?? ($customer['postal_code'] ?? ''), 10);
+        if (mb_strlen($name) < 2) fail(400, 'Please enter your full name.');
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) fail(400, 'Please enter a valid email address.');
+        if ($phone === null) fail(400, 'Please enter a valid Indian mobile number.');
+        if (mb_strlen($address) < 5) fail(400, 'Please enter the street address your parcels are delivered to.');
+        if (!in_array($city, tamil_nadu_districts(), true)) fail(400, 'Choose a Tamil Nadu district for delivery.');
+        if (!preg_match('/^6\d{5}$/', $pin)) fail(400, 'Please enter a valid 6-digit Tamil Nadu PIN code.');
+        if (one('SELECT id FROM customers WHERE phone=? AND id<>?', [$phone, $customer['id']])) {
+            fail(409, 'That mobile number already belongs to another account. Contact the store if it is yours.');
+        }
+        if ($email !== '' && one('SELECT id FROM customers WHERE email=? AND id<>?', [$email, $customer['id']])) {
+            fail(409, 'That email address already belongs to another account.');
+        }
+        $marketingOptIn = array_key_exists('marketingOptIn', $input)
+            ? (!empty($input['marketingOptIn']) ? 1 : 0)
+            : (int)($customer['marketing_opt_in'] ?? 0);
+        try {
+            run(
+                'UPDATE customers SET full_name=?,email=?,phone=?,delivery_address=?,city=?,state=?,postal_code=?,marketing_opt_in=? WHERE id=?',
+                [$name, $email === '' ? null : $email, $phone, $address, $city, 'Tamil Nadu', $pin, $marketingOptIn, $customer['id']],
+            );
+        } catch (Throwable $error) {
+            if ($error instanceof PDOException && (string)$error->getCode() === '23000') {
+                fail(409, 'That mobile number or email address is already in use by another account.');
+            }
+            throw $error;
+        }
+        $updated = one('SELECT * FROM customers WHERE id=?', [$customer['id']]);
+        if (!$updated) fail(404, 'Customer not found.');
+        respond(200, customer_orders_response($updated));
+    }
+    if (($parts[0] ?? '') === 'customer' && ($parts[1] ?? '') === 'orders' && count($parts) === 4
+        && $parts[3] === 'tracking' && $method === 'GET') {
+        rate_limit('customer-tracking', 30, 60);
+        $customer = customer_session_required();
+        $number = strtoupper(rawurldecode($parts[2]));
+        if (!valid_order_number($number)) fail(404, 'Order not found.');
+        $order = one('SELECT * FROM orders WHERE order_number=? AND customer_id=?', [$number, $customer['id']]);
+        if (!$order) fail(404, 'Order not found.');
+        $force = ($_GET['refresh'] ?? '') === '1';
+        respond(200, ['tracking' => tracking_snapshot($order, $force)]);
+    }
     if ($path === 'customer/logout' && $method === 'POST') {
         unset($_SESSION['customer_id'], $_SESSION['customer_expires_at']);
         respond(200, ['ok' => true]);
@@ -460,6 +567,9 @@ function handle_commerce(string $path, array $parts): bool
 
     if ($path === 'orders' && $method === 'POST') {
         rate_limit('order-create', 20, 60);
+        // Purchases require a signed-in customer so order history, favourites,
+        // invoices and status notifications always belong to one account.
+        $account = customer_session_required();
         $body = body();
         $contact = $body['contact'] ?? $body;
         if (!is_array($contact)) fail(400, 'Delivery details are missing.');
@@ -508,28 +618,17 @@ function handle_commerce(string $path, array $parts): bool
             }
         }
 
-        // The phone number is the account identity used by WhatsApp sign-in, so
-        // match it first. Never merge two separate customer records that merely
-        // share an email address.
-        $byPhone = one('SELECT * FROM customers WHERE phone=? LIMIT 1', [$phone]);
-        $byEmail = $byPhone === null ? one('SELECT * FROM customers WHERE email=? ORDER BY updated_at DESC LIMIT 1', [$email]) : null;
-        $existing = $byPhone ?? $byEmail;
-        if ($existing) {
-            $customerId = $existing['id'];
-            run('UPDATE customers SET full_name=?,email=?,phone=?,delivery_address=?,city=?,state=?,postal_code=?,marketing_opt_in=? WHERE id=?', [
-                $name, $email, $phone, $address, $city, $state, $pin,
-                !empty($contact['marketingOptIn']) ? 1 : 0, $customerId,
-            ]);
-        } else {
-            $customerId = new_id();
-            do {
-                $customerCode = customer_code();
-            } while (one('SELECT id FROM customers WHERE customer_code=?', [$customerCode]));
-            run('INSERT INTO customers (id,customer_code,full_name,email,phone,delivery_address,city,state,postal_code,marketing_opt_in) VALUES (?,?,?,?,?,?,?,?,?,?)', [
-                $customerId, $customerCode, $name, $email, $phone, $address, $city, $state, $pin,
-                !empty($contact['marketingOptIn']) ? 1 : 0,
-            ]);
+        // The signed-in account owns the order. Contact fields confirm/refresh
+        // the profile instead of creating a second customer record.
+        $customerId = (string)$account['id'];
+        $customerCode = (string)$account['customer_code'];
+        if ($phone !== (string)$account['phone'] && one('SELECT id FROM customers WHERE phone=? AND id<>?', [$phone, $customerId])) {
+            fail(409, 'That mobile number belongs to another account. Change it in your profile first.');
         }
+        run('UPDATE customers SET full_name=?,email=?,phone=?,delivery_address=?,city=?,state=?,postal_code=?,marketing_opt_in=? WHERE id=?', [
+            $name, $email, $phone, $address, $city, $state, $pin,
+            !empty($contact['marketingOptIn']) ? 1 : 0, $customerId,
+        ]);
         $customer = one('SELECT * FROM customers WHERE id=?', [$customerId]);
         if ($customer) link_whatsapp_leads_to_customer(
             (string)$customer['id'],
@@ -559,6 +658,13 @@ function handle_commerce(string $path, array $parts): bool
             throw $e;
         }
         $details = order_details($orderNumber);
+        add_customer_notification(
+            $customerId,
+            'order',
+            'Order ' . $orderNumber . ' received',
+            'We saved your order for ₹' . number_format($total / 100, 2) . '. ' . ($total > 0 ? 'Complete payment to confirm it.' : ''),
+            '/account?tab=orders',
+        );
         notify_event(
             $email,
             'order.created',

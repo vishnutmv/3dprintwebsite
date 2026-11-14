@@ -561,6 +561,42 @@ function handle_admin(string $path, array $parts): bool
         foreach ($rows as $order) $out[] = mapped_details(order_details($order['order_number']));
         respond(200, ['orders' => $out]);
     }
+    if (preg_match('#^admin/orders/([^/]+)/shipment$#', $path, $match) && $method === 'PATCH') {
+        if (!tracking_columns_ready()) {
+            fail(503, 'Run migrations/0016_order_tracking.sql on the database before saving courier tracking.');
+        }
+        $input = body();
+        $number = rawurldecode($match[1]);
+        $details = order_details($number);
+        if (!$details) fail(404, 'Order not found.');
+        $rawCourier = strtolower(trim((string)($input['courier'] ?? '')));
+        $rawTracking = trim((string)($input['trackingNumber'] ?? ''));
+        if ($rawCourier === '' && $rawTracking === '') {
+            run('UPDATE orders SET courier_slug=NULL,tracking_number=NULL,tracking_synced_at=NULL,tracking_payload=NULL WHERE id=?', [$details['order']['id']]);
+            respond(200, ['order' => mapped_details(order_details($number))]);
+        }
+        if ($rawCourier === '' || $rawTracking === '') fail(400, 'Enter both the courier and the tracking number.');
+        $courier = tracking_slug($rawCourier);
+        if ($courier === '') fail(400, 'Choose a courier slug such as delhivery, dtdc, bluedart or speedpost.');
+        $tracking = tracking_reference($rawTracking);
+        if ($tracking === '') fail(400, 'Enter a valid AWB or tracking number (letters and digits, no spaces).');
+        run(
+            'UPDATE orders SET courier_slug=?,tracking_number=?,tracking_synced_at=NULL,tracking_payload=NULL WHERE id=?',
+            [$courier, $tracking, $details['order']['id']],
+        );
+        $details = order_details($number);
+        add_customer_notification(
+            (string)$details['order']['customer_id'],
+            'tracking',
+            'Tracking added for ' . $number,
+            tracking_courier_name($courier) . ' · AWB ' . $tracking . '. Follow the live timeline in your profile.',
+            '/account?tab=orders',
+        );
+        respond(200, [
+            'order' => mapped_details($details),
+            'tracking' => tracking_snapshot($details['order'], true),
+        ]);
+    }
     if (preg_match('#^admin/orders/([^/]+)$#', $path, $match) && $method === 'PATCH') {
         $input = body();
         $status = text_value($input['orderStatus'] ?? $input['status'] ?? '', 20);
@@ -575,6 +611,13 @@ function handle_admin(string $path, array $parts): bool
         $whatsappStatus = 'not_configured';
         if ($changed) {
             $details = order_details($number);
+            add_customer_notification(
+                (string)$details['order']['customer_id'],
+                'order_status',
+                'Order ' . $number . ' — ' . ucfirst($status),
+                order_status_whatsapp_text($details, $status),
+                '/account?tab=orders',
+            );
             if (!empty($details['customer']['email'])) notify_event(
                 $details['customer']['email'], 'order.status',
                 'Order ' . $details['order']['order_number'] . ' is now ' . $status,
