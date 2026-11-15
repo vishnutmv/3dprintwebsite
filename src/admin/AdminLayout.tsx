@@ -21,6 +21,7 @@ import {
   Users,
 } from "lucide-react";
 import { AdminMark } from "@/components/Logo";
+import { BRAND } from "@/lib/brand";
 import { Toaster } from "@/components/Toaster";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAdminAuth } from "@/lib/auth";
@@ -66,42 +67,42 @@ function LoginScreen() {
   return (
     <div className="admin-shell relative grid min-h-screen place-items-center px-4">
       <div className="absolute right-4 top-4"><ThemeToggle /></div>
-      <div className="glass-deep liquid-edge w-full max-w-[400px] rounded-[2rem] p-7">
+      <div className="w-full max-w-[420px] rounded-[28px] border border-white/10 bg-[#101310] p-7 text-[#f5f5f0] shadow-[0_40px_90px_-40px_rgba(0,0,0,.55)]">
         <AdminMark />
-        <h1 className="mt-6 text-[26px] leading-tight">Studio admin</h1>
-        <p className="mt-2 text-[12.5px] leading-relaxed text-white/50">
+        <h1 className="mt-6 text-[26px] leading-tight text-[#f7f8f2]">{BRAND.name} admin</h1>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-[#a9afa4]">
           {demoMode
             ? "Sign in to the local client preview. All sample changes stay in this browser."
             : "Sign in with the admin account configured on the server. Products, orders, customers, WhatsApp enquiries and prize awards live here."}
         </p>
 
         <form className="mt-6" onSubmit={submit}>
-          <label className="label" htmlFor="admin-email">Email</label>
+          <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#8f948b]" htmlFor="admin-email">Email</label>
           <input
             id="admin-email"
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="field"
-            placeholder="admin@3dprintco.in"
+            className="field border-[#363c34] bg-[#141713] text-[#f5f5f0] placeholder:text-[#7f857c]"
+            placeholder="Admin email"
             autoComplete="username"
             autoFocus
             required
           />
 
-          <label className="label mt-3" htmlFor="admin-password">Password</label>
+          <label className="mb-1.5 mt-3 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#8f948b]" htmlFor="admin-password">Password</label>
           <input
             id="admin-password"
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="field"
+            className="field border-[#363c34] bg-[#141713] text-[#f5f5f0] placeholder:text-[#7f857c]"
             placeholder="••••••••"
             autoComplete="current-password"
             required
           />
 
-          {error && <p className="mt-2 text-[11.5px] text-coral">{error}</p>}
+          {error && <p className="mt-2 text-[11.5px] text-[#ff8c78]">{error}</p>}
 
           <button type="submit" className="btn-primary mt-4 w-full" disabled={signingIn}>
             {signingIn ? (
@@ -112,13 +113,13 @@ function LoginScreen() {
           </button>
         </form>
 
-        <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-[11px] leading-relaxed text-white/40">
+        <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[11px] leading-relaxed text-[#8f948b]">
           {demoMode
             ? "Demo credentials are for this local preview only. Do not use this sign-in mode in production."
             : "Credentials are verified on the server. The 8-hour session is held in an HttpOnly cookie and is not accessible to browser JavaScript."}
         </div>
 
-        <NavLink to="/" className="mt-5 flex items-center gap-2 text-[11.5px] text-white/40 hover:text-white">
+        <NavLink to="/" className="mt-5 flex items-center gap-2 text-[11.5px] text-[#a9afa4] hover:text-white">
           <Store className="h-3.5 w-3.5" /> Back to the shop
         </NavLink>
       </div>
@@ -131,7 +132,6 @@ export function AdminLayout() {
   const initialized = useAdminAuth((state) => state.initialized);
   const signOut = useAdminAuth((state) => state.signOut);
   const verify = useAdminAuth((state) => state.verify);
-  const settings = useStore((state) => state.settings);
   const fetchSettings = useStore((state) => state.fetchSettings);
   const toast = useToast((state) => state.push);
   const location = useLocation();
@@ -252,7 +252,7 @@ export function AdminLayout() {
 
   useEffect(() => {
     const originalTitle = document.title;
-    if (attentionCount > 0) document.title = `(${attentionCount}) WhatsApp attention · 3D Print Co.`;
+    if (attentionCount > 0) document.title = `(${attentionCount}) WhatsApp attention · ${BRAND.name}`;
     else document.title = originalTitle;
     return () => { document.title = originalTitle; };
   }, [attentionCount]);
@@ -275,9 +275,9 @@ export function AdminLayout() {
   if (!authenticated) return <LoginScreen />;
 
   return (
-    <div className="admin-shell mx-auto flex max-w-[1280px] gap-5 px-3 py-4">
+    <div className="admin-shell mx-auto flex max-w-[1440px] gap-5 px-3 py-4">
       <Toaster />
-      <aside className="glass sticky top-4 hidden h-[calc(100vh-2rem)] w-[220px] shrink-0 flex-col rounded-3xl p-3 lg:flex">
+      <aside className="admin-sidebar sticky top-4 hidden h-[calc(100vh-2rem)] w-[232px] shrink-0 flex-col rounded-3xl p-3 lg:flex">
         <div className="px-2 py-3">
           <AdminMark />
         </div>
@@ -296,8 +296,8 @@ export function AdminLayout() {
                     : item.to === "/admin/leads" && newLeadCount > 0
                     ? "border border-sun/20 bg-sun/[0.08] text-sun"
                     : isActive
-                    ? "bg-violet-500/20 text-white shadow-[inset_0_1px_0_rgba(255,255,255,.12)]"
-                    : "text-white/50 hover:bg-white/[0.05] hover:text-white",
+                    ? "bg-[#c6ff00] font-semibold text-[#111311] shadow-[0_10px_22px_-14px_rgba(160,210,0,.9)]"
+                    : "text-[#a9afa4] hover:bg-white/[0.06] hover:text-white",
                 )
               }
             >
@@ -324,9 +324,9 @@ export function AdminLayout() {
             <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">Appearance</span>
             <ThemeToggle />
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/35">Store</p>
-            <p className="mt-1 truncate text-[12px] font-semibold text-white">{settings.storeName}</p>
+          <div className="admin-store-card rounded-2xl p-3">
+            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/45">Store</p>
+            <p className="mt-1 truncate text-[12px] font-semibold text-white">{BRAND.name}</p>
             <p className="mt-0.5 flex items-center gap-1.5 text-[10.5px] text-white/35">
               <span className={`h-1.5 w-1.5 rounded-full ${demoMode ? "bg-sun" : "bg-mint"}`} />
               {demoMode ? "Demo · this browser" : "InterServer · live"}
@@ -334,7 +334,7 @@ export function AdminLayout() {
           </div>
           <NavLink
             to="/"
-            className="flex items-center gap-2 rounded-2xl px-3 py-2.5 text-[12.5px] text-white/50 hover:bg-white/[0.05] hover:text-white"
+            className="flex items-center gap-2 rounded-2xl px-3 py-2.5 text-[12.5px] text-[#a9afa4] hover:bg-white/[0.06] hover:text-white"
           >
             <Store className="h-4 w-4" /> View shop
           </NavLink>
@@ -402,7 +402,7 @@ export function AdminLayout() {
                     ? "animate-pulse bg-coral/[0.08] text-coral"
                     : item.to === "/admin/leads" && newLeadCount > 0
                     ? "bg-sun/[0.08] text-sun"
-                    : isActive ? "bg-violet-500/25 text-white" : "text-white/50",
+                    : isActive ? "bg-[#111311] font-semibold text-[#c6ff00]" : "text-[color:var(--muted)]",
                 )
               }
             >

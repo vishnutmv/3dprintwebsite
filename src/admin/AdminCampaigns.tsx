@@ -100,7 +100,7 @@ export function AdminCampaigns() {
             maxLength={1000}
             rows={6}
             className="field resize-y"
-            placeholder="Hi! 3D Print Co. has an update for you..."
+            placeholder="Hi! Zencmart has an update for you..."
             aria-label="Campaign message"
           />
           <div className="mt-2 flex items-center justify-between text-[10.5px] text-white/35">

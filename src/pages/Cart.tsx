@@ -3,7 +3,7 @@
  */
 
 import { Link } from "react-router-dom";
-import { Minus, Plus, ShoppingBag, X } from "lucide-react";
+import { ArrowLeft, ChevronRight, Lock, Minus, Plus, ShoppingBag, Trash2, Truck } from "lucide-react";
 import { EmptyState } from "@/components/ui";
 import { inr } from "@/lib/format";
 import { effectiveProductPrice, usePromotionClock } from "@/lib/promotions";
@@ -22,6 +22,10 @@ export function Cart() {
   const shipping = subtotal === 0 || subtotal >= settings.freeShippingOver ? 0 : settings.shippingFlat;
   const total = subtotal + shipping;
   const toFreeShipping = settings.freeShippingOver - subtotal;
+  const progress =
+    settings.freeShippingOver > 0
+      ? Math.min(100, Math.round((subtotal / settings.freeShippingOver) * 100))
+      : 100;
 
   if (lines.length === 0) {
     return (
@@ -41,123 +45,161 @@ export function Cart() {
   }
 
   return (
-    <div className="mx-auto max-w-[1100px] px-4 pb-16 pt-24">
-      <h1 className="text-[clamp(24px,3.4vw,32px)]">Your cart</h1>
-      <p className="mt-1 text-[12.5px] text-white/45">
-        {lines.length} {lines.length === 1 ? "line item" : "line items"}
-      </p>
+    <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-24 md:pt-28">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[11px] text-[color:var(--faint)]">
+        <Link to="/" className="hover:text-[color:var(--text)]">Home</Link>
+        <ChevronRight className="h-3 w-3" />
+        <span className="text-[color:var(--text)]">Cart</span>
+      </nav>
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[clamp(26px,3.8vw,36px)]">
+            Your Cart <span className="text-[color:var(--accent)]">({lines.length})</span>
+          </h1>
+          <p className="mt-1 text-[12.5px] text-[color:var(--muted)]">
+            {lines.reduce((sum, line) => sum + line.qty, 0)} items ready to print.
+          </p>
+        </div>
+        <Link
+          to="/shop"
+          className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-[color:var(--muted)] transition hover:text-[color:var(--text)]"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Continue shopping
+        </Link>
+      </div>
+
+      <div className="mt-6 grid gap-5 lg:grid-cols-[1.5fr_1fr] lg:items-start">
         <div className="grid gap-3">
           {lines.map((line) => (
-            <div key={line.product.id} className="glass flex gap-4 rounded-2xl p-3.5">
-              <div
-                className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-xl"
-                style={{
-                  background: `radial-gradient(120% 120% at 30% 0%, ${line.product.accent}44, transparent 62%), linear-gradient(160deg,#150c2c,#0b0718)`,
-                }}
-              >
-                {line.product.imageUrl ? (
-                  <img
-                    src={line.product.imageUrl}
-                    alt={line.product.name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div
-                    className="h-9 w-9 rounded-[28%]"
-                    style={{ background: line.product.accent }}
-                  />
-                )}
-              </div>
+            <div
+              key={line.product.id}
+              className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-3.5 sm:p-4"
+            >
+              <div className="flex gap-3.5 sm:gap-4">
+                <Link
+                  to={`/product/${line.product.slug}`}
+                  className="grid h-[74px] w-[74px] shrink-0 place-items-center overflow-hidden rounded-xl border border-[color:var(--border-soft)] bg-[color:var(--surface-soft)] sm:h-[88px] sm:w-[88px]"
+                  aria-label={`View ${line.product.name}`}
+                >
+                  {line.product.imageUrl ? (
+                    <img src={line.product.imageUrl} alt={line.product.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div
+                      className="h-9 w-9 rounded-[26%]"
+                      style={{ background: line.product.accent }}
+                    />
+                  )}
+                </Link>
 
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <Link
-                      to={`/product/${line.product.slug}`}
-                      className="block truncate text-[13.5px] font-semibold text-white hover:text-violet-200"
-                    >
-                      {line.product.name}
-                    </Link>
-                    <p className="text-[11px] text-white/35">
-                      {line.product.category} · {line.product.material}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeFromCart(line.product.id)}
-                    className="rounded-lg p-1 text-white/30 transition hover:bg-coral/10 hover:text-coral"
-                    aria-label={`Remove ${line.product.name}`}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between">
-                  <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[color:var(--faint)]">
+                        {line.product.category}
+                      </p>
+                      <Link
+                        to={`/product/${line.product.slug}`}
+                        className="mt-0.5 block truncate text-[13.5px] font-semibold text-[color:var(--heading)] hover:text-[color:var(--accent)]"
+                      >
+                        {line.product.name}
+                      </Link>
+                      <p className="mt-0.5 text-[11px] text-[color:var(--muted)]">
+                        {line.product.material}
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setQty(line.product.id, line.qty - 1)}
-                      className="grid h-7 w-7 place-items-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white"
-                      aria-label="Decrease quantity"
+                      onClick={() => removeFromCart(line.product.id)}
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[color:var(--faint)] transition hover:bg-[color:var(--surface-deep)] hover:text-[color:var(--coral)]"
+                      aria-label={`Remove ${line.product.name}`}
                     >
-                      <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <span className="num w-7 text-center text-[12.5px]">{line.qty}</span>
-                    <button
-                      type="button"
-                      onClick={() => setQty(line.product.id, line.qty + 1)}
-                      className="grid h-7 w-7 place-items-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white"
-                      aria-label="Increase quantity"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="text-right">
-                    <p className="num text-[14px] font-semibold text-white">{inr(line.lineTotal)}</p>
-                    <p className="text-[10.5px] text-white/35">{inr(effectiveProductPrice(line.product, now))} each</p>
+
+                  <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
+                    <div className="inline-flex items-center gap-1 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-1">
+                      <button
+                        type="button"
+                        onClick={() => setQty(line.product.id, line.qty - 1)}
+                        className="grid h-7 w-7 place-items-center rounded-lg text-[color:var(--muted)] transition hover:bg-[color:var(--surface)] hover:text-[color:var(--heading)]"
+                        aria-label="Decrease quantity"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="num w-7 text-center text-[12px] font-semibold">{line.qty}</span>
+                      <button
+                        type="button"
+                        onClick={() => setQty(line.product.id, line.qty + 1)}
+                        className="grid h-7 w-7 place-items-center rounded-lg text-[color:var(--muted)] transition hover:bg-[color:var(--surface)] hover:text-[color:var(--heading)]"
+                        aria-label="Increase quantity"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="text-right">
+                      <p className="num text-[15px] font-semibold text-[color:var(--heading)]">
+                        {inr(line.lineTotal)}
+                      </p>
+                      <p className="text-[10px] text-[color:var(--faint)]">
+                        {inr(effectiveProductPrice(line.product, now))} each
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           ))}
+
+          <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-4">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#c6ff00] text-[#111311]">
+                <Truck className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11.5px] font-semibold text-[color:var(--heading)]">
+                  {toFreeShipping > 0 ? `Add ${inr(toFreeShipping)} more for free shipping` : "Free shipping unlocked"}
+                </p>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[color:var(--surface-deep)]">
+                  <div
+                    className="h-full rounded-full bg-[#9fd400] transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="glass liquid-edge h-fit rounded-2xl p-5">
-          <h2 className="text-[15px]">Order summary</h2>
+        <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-5 lg:sticky lg:top-24">
+          <h2 className="text-[15px]">Order Summary</h2>
 
-          <div className="mt-4 space-y-2 text-[12.5px]">
-            <div className="flex justify-between text-white/55">
+          <div className="mt-4 space-y-2.5 text-[12.5px]">
+            <div className="flex justify-between text-[color:var(--muted)]">
               <span>Subtotal</span>
-              <span className="num text-white/85">{inr(subtotal)}</span>
+              <span className="num font-medium text-[color:var(--text)]">{inr(subtotal)}</span>
             </div>
-            <div className="flex justify-between text-white/55">
+            <div className="flex justify-between text-[color:var(--muted)]">
               <span>Shipping</span>
-              <span className="num text-white/85">{shipping === 0 ? "Free" : inr(shipping)}</span>
+              <span className="num font-medium text-[color:var(--text)]">
+                {shipping === 0 ? "Free" : inr(shipping)}
+              </span>
             </div>
-            {toFreeShipping > 0 && (
-              <p className="rounded-xl border border-sun/25 bg-sun/[0.06] px-3 py-2 text-[11px] text-sun/85">
-                Add {inr(toFreeShipping)} more for free shipping.
-              </p>
-            )}
-            <div className="mt-3 flex justify-between border-t border-white/10 pt-3 text-[14px] font-semibold">
+            <div className="mt-2 flex justify-between border-t border-[color:var(--border)] pt-3 text-[15px] font-bold">
               <span>Total</span>
-              <span className="num text-white">{inr(total)}</span>
+              <span className="num text-[color:var(--heading)]">{inr(total)}</span>
             </div>
           </div>
 
           <Link to="/checkout" className="btn-primary mt-5 w-full py-3.5">
-            Checkout
+            Proceed to Checkout <ChevronRight className="h-4 w-4" />
           </Link>
-          <Link
-            to="/shop"
-            className="mt-2 block text-center text-[11.5px] text-white/40 hover:text-white"
-          >
-            Continue shopping
-          </Link>
+          <p className="mt-3 flex items-center justify-center gap-1.5 text-[10.5px] text-[color:var(--faint)]">
+            <Lock className="h-3 w-3" /> Secure checkout powered by Razorpay
+          </p>
 
-          <p className="mt-4 text-center text-[10.5px] leading-relaxed text-white/30">
+          <p className="mt-3 border-t border-[color:var(--border-soft)] pt-3 text-center text-[10px] leading-relaxed text-[color:var(--faint)]">
             {settings.paymentsReady
               ? "Payments are processed by Razorpay TEST mode. No real money moves."
               : "Checkout is disabled until Razorpay test keys are configured."}

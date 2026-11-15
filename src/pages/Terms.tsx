@@ -1,5 +1,5 @@
 /**
- * Terms page — legal terms for the 3D Print Co. website.
+ * Terms page — legal terms for the Zencmart website.
  */
 
 export function Terms() {
@@ -14,7 +14,7 @@ export function Terms() {
               confirm the final terms, business identity, tax details, delivery promises and consumer policies with a qualified
               professional in India.
             </p>
-            <p className="mt-4">These draft terms describe use of the 3D Print Co. website and purchases from the store. Replace this store name and contact details if they differ from the operating business.</p>
+            <p className="mt-4">These draft terms describe use of the Zencmart website and purchases from the store. Replace this store name and contact details if they differ from the operating business.</p>
 
             <h2 className="mt-6 text-[13px] font-bold uppercase tracking-[0.1em] text-violet-300 mb-4">1. Acceptance of terms</h2>
             <p>By accessing and using this website, you agree to comply with these terms of service. If you disagree with any part of the terms, you may not access the website.</p>

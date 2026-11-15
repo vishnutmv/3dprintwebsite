@@ -126,7 +126,7 @@ type DemoDb = {
 };
 
 const demoSettings: StoreSettings = {
-  storeName: "3D Print Co.",
+  storeName: "Zencmart",
   supportEmail: "hello@3dprintco.in",
   supportPhone: "+91 98400 00000",
   city: "Chennai",
@@ -208,7 +208,7 @@ function seedDemoDb(): DemoDb {
   ];
 
   const prizes: DemoPrize[] = [
-    { id: "demo-r-01", title: "₹500 Studio Voucher", description: "A sample partner voucher for a future campaign. Final terms are subject to approval.", prizeType: "voucher", tier: "regular", voucherCode: "DEMO-500", worth: 50000, sponsor: "3D Print Co.", cycle: "Sample campaign", status: "open", active: true, quantity: 1, createdAt: daysAgo(15) },
+    { id: "demo-r-01", title: "₹500 Studio Voucher", description: "A sample partner voucher for a future campaign. Final terms are subject to approval.", prizeType: "voucher", tier: "regular", voucherCode: "DEMO-500", worth: 50000, sponsor: "Zencmart", cycle: "Sample campaign", status: "open", active: true, quantity: 1, createdAt: daysAgo(15) },
     { id: "demo-r-02", title: "Custom Print Credit", description: "Credit toward a custom 3D-printing project.", prizeType: "credit", tier: "special", worth: 100000, sponsor: "Studio reward", cycle: "Sample campaign", status: "open", active: true, quantity: 1, createdAt: daysAgo(12) },
     { id: "demo-r-03", title: "Filament Starter Pack", description: "A sample reward bundle for an upcoming partner campaign.", prizeType: "product", tier: "regular", worth: 79900, sponsor: "Partner preview", cycle: "Sample campaign", status: "open", active: true, quantity: 1, createdAt: daysAgo(9) },
   ];

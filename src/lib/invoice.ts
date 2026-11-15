@@ -13,7 +13,7 @@ export function createInvoicePdf(order: Order): jsPDF {
 
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(20);
-  pdf.text("3D Print Co.", left, y);
+  pdf.text("Zencmart", left, y);
   pdf.setFontSize(14);
   pdf.text("PAYMENT INVOICE", right, y, { align: "right" });
   y += 30;
@@ -91,7 +91,7 @@ export function createInvoicePdf(order: Order): jsPDF {
   pdf.text(money(order.total), right - 6, y, { align: "right" });
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
-  pdf.text("Payment verified by Razorpay. Thank you for shopping with 3D Print Co.", left, 790);
+  pdf.text("Payment verified by Razorpay. Thank you for shopping with Zencmart", left, 790);
   return pdf;
 }
 

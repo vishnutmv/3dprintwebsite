@@ -85,13 +85,13 @@ export function AdminPrizes() {
   const message = useMemo(() => {
     if (!selectedPrize || !selectedCustomer) return "";
     return [
-      `Hi ${selectedCustomer.name.split(" ")[0]}, a reward card from 3D Print Co. is ready for you.`,
+      `Hi ${selectedCustomer.name.split(" ")[0]}, a reward card from Zencmart is ready for you.`,
       "",
       `Reward: ${selectedPrize.title}`,
       "Scratch the private card link in the WhatsApp message to reveal the reward.",
       "The reward can only be revealed once.",
       "",
-      "— 3D Print Co.",
+      "— Zencmart",
     ].filter(Boolean).join("\n");
   }, [selectedCustomer, selectedPrize]);
 

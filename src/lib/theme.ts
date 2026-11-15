@@ -27,7 +27,7 @@ function applyTheme(theme: Theme) {
     // Private mode can refuse storage; the in-memory theme still works.
   }
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", theme === "dark" ? "#0d110f" : "#f8f7f3");
+  if (meta) meta.setAttribute("content", theme === "dark" ? "#111311" : "#f8f6f1");
 }
 
 type ThemeState = {

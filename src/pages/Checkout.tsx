@@ -6,6 +6,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2, Lock, ShieldCheck, UserRound } from "lucide-react";
+import { PrintingLoader } from "@/components/PrintingLoader";
+import { BRAND } from "@/lib/brand";
 import { inr } from "@/lib/format";
 import { ApiError, apiPost } from "@/lib/api";
 import { createPaymentSession, openRazorpayCheckout, verifyRazorpayPayment } from "@/lib/razorpay";
@@ -185,8 +187,8 @@ export function Checkout() {
       const session = await createPaymentSession(created.order.orderNumber, customerCode);
       const callback = await openRazorpayCheckout({
         session,
-        storeName: settings.storeName,
-        description: `${lines.length} print${lines.length === 1 ? "" : "s"} · ${settings.storeName}`,
+        storeName: BRAND.name,
+        description: `${lines.length} print${lines.length === 1 ? "" : "s"} · ${BRAND.name}`,
       });
 
       const order = await verifyRazorpayPayment(callback);
@@ -328,6 +330,16 @@ export function Checkout() {
               </>
             )}
           </button>
+
+          {busy && (
+            <div className="mt-3">
+              <PrintingLoader
+                compact
+                message="Preparing your order…"
+                detail="Saving the order and opening secure Razorpay checkout. Do not close this page."
+              />
+            </div>
+          )}
 
           <p className="mt-3 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-white/35">
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />

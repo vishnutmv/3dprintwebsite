@@ -1,87 +1,86 @@
-# UI Redesign Handoff
+# Zencmart UI Handoff
 
 ## Project
 
-- React 18 + TypeScript + Vite storefront for 3D Print Co.
-- Styling uses Tailwind CSS and shared rules in `src/styles/index.css`.
+- React 18 + TypeScript + Vite storefront and admin panel for **Zencmart**, a 3D-printing studio.
+- Styling uses Tailwind CSS plus shared tokens/components in `src/styles/index.css`.
 - Client routing is configured in `src/App.tsx` with React Router.
-- Storefront is wrapped by `src/components/SiteLayout.tsx`.
-- Admin pages are under `/admin` and use `src/admin/AdminLayout.tsx`.
+- Storefront is wrapped by `src/components/SiteLayout.tsx`; admin pages live under `/admin` and use `src/admin/AdminLayout.tsx`.
+- Frontend is deployed on Vercel; the PHP API, MariaDB and media stay on InterServer.
 
 ## User request and scope
 
-The user wanted the storefront and admin panel redesigned to feel like a polished, friendly, responsive ecommerce site, with smoother perceived performance. They explicitly asked not to change application functions or workflows.
+The storefront and admin panel were redesigned into a premium charcoal + neon-lime 3D-printing experience, rebranded to **Zencmart**, working on desktop and phone widths. This remains a frontend-only change:
 
-Keep future work within that scope unless the user asks otherwise:
-
-- Preserve routes, checkout behavior, admin actions, data handling, and business logic.
-- Treat the current changes as a visual refresh and load-performance improvement only.
+- Routes, checkout/payment behavior, admin actions, data handling and business logic are unchanged.
+- Visual effects must never drive cart or payment state; the existing handlers remain the source of truth.
 - Do not replace or simplify existing functionality while refining the UI.
 
-## Design changes made
+## Design system
 
-- Replaced the dark glassmorphism foundation with a warm off-white, charcoal, terracotta, and muted green palette.
-- Changed shared card surfaces, form fields, buttons, chips, borders, typography, and hover states for the light theme.
-- Removed expensive decorative blur, grain, and animated blob effects to keep the interface calmer and lighter to render.
-- Added a mobile navigation row for Home, Shop, and Rewards.
-- Updated the storefront header, logo colors, footer, product-card media surfaces, and admin shell to match the new theme.
-- Added a featured-product panel to the home hero, linking to the existing product detail route.
-- Added responsive spacing for the mobile storefront header.
+- Charcoal chrome (`#0f120f` / `#111311`) with warm paper content surfaces (`#f8f6f1`, `#ffffff`).
+- Neon lime (`#c6ff00`, hover `#d7ff38`) for primary actions, active navigation, badges and highlights; dark text on lime.
+- Muted sage neutrals for secondary text; subtle borders instead of heavy outlines.
+- A dark theme mirrors the charcoal chrome with darker cards and lime accents. The saved preference still uses the existing `3dprintco-theme` key so current users keep their choice.
+- Theme changes use the View Transition circle reveal, with reduced-motion and no-API fallbacks.
+- Shared tokens live in `src/styles/index.css`; Tailwind’s `violet` palette was remapped to lime so older screens adapt without rewriting every class.
 
-## Dark mode and theme transition
+## Storefront changes
 
-- Added a full dark palette alongside the light theme; the choice persists in local storage and is applied before first paint to avoid a flash.
-- The header toggle now uses the View Transition API to reveal the new theme in a circle from the switch. Browsers without the API, and users with reduced motion enabled, get an instant swap.
-- Colour transitions are frozen with `html.theme-switching` while the browser captures both snapshots, then resume afterwards.
-- Contrast tokens were tightened for light and dark mode (muted/faint text, accent text on both themes).
+- **Header** (`src/components/SiteHeader.tsx`): charcoal sticky bar with logo, Home/Shop/Rewards/Custom Print, working categories dropdown, catalogue search (`/shop?q=`), theme switch, account, favourites/notifications for signed-in customers, live cart count and admin link. Mobile gets a drawer with navigation, categories, theme switch, sign-in and admin.
+- **Home** (`src/pages/Home.tsx`): premium dark hero (“Bring Ideas to Life in 3D”), trust strip, category showcase from live categories, featured products, workflow strip, testimonials and rewards panel.
+- **Product cards** (`src/components/ProductCard.tsx`): white cards with hover lift, badges, rating, live price and a compact add-to-cart action.
+- **Product detail** (`src/pages/ProductDetail.tsx`): gallery/video/3D viewer, material, quantity selector, Add to Cart, Buy Now, specifications and reviews. No new product options were invented.
+- **Shop** (`src/pages/Shop.tsx`): breadcrumb, filter sidebar (search, category counts, price bands), sort, responsive two-column mobile grid, collapsible mobile filters. Existing filtering/sorting logic is untouched.
+- **Cart** (`src/pages/Cart.tsx`): redesigned line items, quantity controls, free-shipping progress and sticky summary using the existing totals.
+- **Checkout** (`src/pages/Checkout.tsx`): layout refresh only. A compact 3D-printer loader appears inline while the existing request/payment flow is busy; it is not a blocking overlay and never changes payment state.
+- **Order confirmation** (`src/pages/OrderConfirmation.tsx`): a print-completion celebration (`src/components/PrintSuccess.tsx`) renders only when the server reports `paymentStatus === "paid"` and the app is not in demo mode. Cancelled/failed/pending flows keep their existing notices and retry action.
+- **Brand**: `src/lib/brand.ts` supplies display strings; logo, favicon, 404 page, footer, invoice PDF, reward card, admin login and document titles use “Zencmart”.
 
-## Accessibility and perceived performance
+## Cart fly animation
 
-- Added a screen-reader heading to the empty cart, labels to icon-only promo links, and an underline affordance to inline review links.
-- Reserved the first viewport in route/product loading states and the account loading card so the footer does not jump when content arrives.
-- Throttled-mobile CLS is 0.031 (down from 0.581 recorded before the redesign).
-- The latest audit found 0 serious axe rules, 0 unnamed controls, 0 undersized targets, 0 overflow failures, 4/4 functional flows and 3/3 theme tests passing.
+`src/lib/cart-fly.ts` implements the product-to-cart effect:
 
-## 404 and hosting routes
+- Captures the product media’s `getBoundingClientRect()` and the header cart icon’s rect.
+- Clones the product image (or a lime cube SVG for photo-less products) into a fixed overlay.
+- Uses the Web Animations API to arc it into the cart with scale/rotation, then removes the node and bounces the cart icon.
+- Runs after the existing `addToCart` call, is skipped for reduced motion (icon pulse only), caps concurrent clones and cleans up on cancel/timeout.
 
-- Added `public/404.html`, a standalone themed not-found page, and a `/favicon.svg`.
-- `vercel.json` now uses explicit `routes`: the API proxy, the known SPA paths, a filesystem handle for static assets, and a real 404 response for unknown paths instead of serving the app shell.
+## Admin changes
 
-## Performance changes
-
-Route screens in `src/App.tsx` are loaded with `React.lazy` and `Suspense`; existing URLs and route hierarchy are unchanged. This avoids loading every storefront and admin screen on the initial visit.
-
-In the verified production build:
-
-- Main app JS chunk: about 277 KB (88 KB gzip).
-- 3D `ModelViewer` chunk: about 916 KB (247 KB gzip), separated from the initial app chunk.
+- Login is now a charcoal card with lime primary action.
+- Admin sidebar is a dark charcoal panel with lime active states; store label and brand mark use Zencmart.
+- Existing tables, forms, status badges, notifications and all admin handlers are unchanged; lime now flows through previously violet accents.
 
 ## Files changed
 
-- `tailwind.config.js` — warm light palette and adjusted shadows.
-- `src/styles/index.css` — shared light/dark theme, surfaces, controls, typography, contrast tokens, and reduced decorative rendering.
-- `public/404.html`, `public/favicon.svg` — standalone themed 404 page and site icon.
-- `vercel.json` — explicit API, SPA, static and 404 routes.
-- `src/App.tsx` — lazy-loaded route screens with a loading skeleton, full-viewport loading states, and React Router v7 future flags.
-- `src/components/ThemeToggle.tsx` — View Transition theme reveal with fallbacks.
-- `src/components/SiteHeader.tsx` — responsive mobile navigation.
-- `src/components/SiteLayout.tsx` — storefront theme wrapper.
-- `src/components/Logo.tsx` — updated brand mark colors.
-- `src/components/ProductCard.tsx` — light product media tile and readable badges.
-- `src/pages/Home.tsx` — featured-product hero panel.
-- `src/admin/AdminLayout.tsx` — admin theme wrapper and login styling.
-- `index.html` — updated browser theme color.
+- `tailwind.config.js`, `src/styles/index.css` — charcoal/lime palette, new storefront/admin component styles, loader and animation keyframes.
+- `src/lib/brand.ts` — Zencmart display constants.
+- `src/components/Logo.tsx` — lime cube mark, Zencmart wordmark, admin mark.
+- `src/components/SiteHeader.tsx` — new header, categories dropdown, search and mobile drawer.
+- `src/components/ProductCard.tsx` — redesigned card and add-to-cart action.
+- `src/lib/cart-fly.ts` — fly-to-cart helper.
+- `src/pages/Home.tsx`, `Shop.tsx`, `ProductDetail.tsx`, `Cart.tsx`, `Checkout.tsx`, `OrderConfirmation.tsx` — redesigned screens.
+- `src/components/PrintingLoader.tsx`, `PrintSuccess.tsx` — printer waiting and verified-success animations.
+- `src/components/SiteFooter.tsx` — charcoal footer.
+- `src/admin/AdminLayout.tsx` — dark sidebar and login card branding.
+- `src/lib/invoice.ts`, `RewardReveal.tsx`, `Terms.tsx`, `demo.ts`, `store.ts`, `ReceiptModal.tsx` — Zencmart display strings and fallbacks.
+- `index.html`, `public/404.html`, `public/favicon.svg` — title/metadata/theme colour, branded 404 and icon.
 
 ## Verification
 
-- `npm run build` passed, including frontend and API TypeScript checks, and the Vite build (main app chunk about 277 KB / 88 KB gzip).
-- A scripted Playwright audit (`playwright-report-fixed/`) covered 38 page/theme/viewport combinations plus functional flows, theme persistence and throttled CLS; all checks passed.
-- Browser inspection confirmed the storefront rendered at mobile width without horizontal overflow.
-- Browser inspection confirmed the admin login screen rendered with the light theme.
-- React Router v7 future flags are enabled, so the development console no longer emits the deprecation warnings.
+- `npm run build` passes (frontend + API TypeScript, Vite build; main app chunk about 286 KB / 90 KB gzip).
+- Playwright checks against the dev build at 1440px and 390px: home, shop, product, cart, admin login, mobile drawer and dark theme; no horizontal overflow and no broken images. A 320px pass over `/`, `/shop`, `/cart` and `/admin` also reported no overflow.
+- Header search navigates to `/shop?q=dragon` and filters the catalogue to the matching product.
+- Add-to-cart creates one fly clone, removes it, bounces the cart icon and updates the count from 0 → 1.
+- Mobile filters start collapsed and expand on demand.
+- Admin dashboard screens behind authentication were not visually re-verified, and the payment loader/success states were not exercised with live Razorpay because test keys are not configured in the verification environment.
+- The dev environment logs “customer session unavailable in the local demo”, which is expected demo-mode behaviour, not a redesign regression.
 
 ## Notes for the next AI
 
-- Shared CSS overrides intentionally remap legacy `text-white`, `text-white/*`, and white-border utility classes for the light theme. Check contrast carefully when adding elements that intentionally sit on a dark background; the home hero feature has a scoped white-text exception.
-- Product demo data may not include photos. Product cards and the home hero therefore retain a colored accent-based visual fallback.
-- Admin functionality and workflows were not reworked. Continue applying the shared theme rather than changing the logic in individual admin screens.
+- Shared CSS remaps legacy `text-white`, `text-white/*` and white-border utilities to theme colours for light surfaces. On dark panels use explicit colours (`text-[#f7f8f2]`, `text-[#a9afa4]`) or the scoped header/sidebar/footer rules; otherwise text becomes dark and unreadable.
+- The product catalogue currently has no photos in demo data, so cards and the hero use generated accent/lime visuals. Real uploaded images are used automatically when present.
+- Business data still comes from the PHP API. `settings.storeName`, support email/phone and GST settings may still contain the old business details; update them in Admin → Settings (or the database) when the client confirms the new contact details. Display branding itself is Zencmart.
+- Do not gate success animations on timers or client-only state. `PrintSuccess` is deliberately rendered only from verified `paid` order data.
+- Deployment: push the frontend to Vercel; InterServer only needs PHP/API files when those change.

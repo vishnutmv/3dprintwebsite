@@ -5,19 +5,26 @@ export default {
     extend: {
       colors: {
         ink: {
-          950: "#f8f7f3",
-          900: "#f1efe9",
-          800: "#e8e5dc",
-          700: "#ddd9cf",
+          950: "#111311",
+          900: "#171917",
+          800: "#1e211d",
+          700: "#2a2e28",
         },
+        // Kept under the original name so existing components adapt together.
         violet: {
-          400: "#e98957",
-          500: "#d86e40",
-          600: "#bd5530",
+          400: "#c6ff00",
+          500: "#b2e800",
+          600: "#9ecf00",
         },
-        coral: "#bd4f3d",
+        lime: {
+          300: "#d7ff38",
+          400: "#c6ff00",
+          500: "#a8d900",
+          600: "#7f9f00",
+        },
+        coral: "#c2452f",
         sun: "#a87716",
-        mint: "#39785a",
+        mint: "#2f7d5c",
       },
       fontFamily: {
         sans: ['"Segoe UI Variable"', "Inter", "system-ui", "-apple-system", "Segoe UI", "Arial", "sans-serif"],
@@ -28,9 +35,10 @@ export default {
         "4xl": "2rem",
       },
       boxShadow: {
-        glass: "0 18px 44px -28px rgba(37,34,24,.24), inset 0 1px 0 rgba(255,255,255,.8)",
-        glow: "0 0 0 1px rgba(216,110,64,.18), 0 14px 36px -18px rgba(189,85,48,.25)",
-        lift: "0 28px 60px -34px rgba(37,34,24,.32)",
+        glass: "0 18px 44px -28px rgba(17,19,17,.24), inset 0 1px 0 rgba(255,255,255,.8)",
+        glow: "0 0 0 1px rgba(198,255,0,.28), 0 16px 42px -20px rgba(150,200,0,.45)",
+        lift: "0 28px 60px -34px rgba(17,19,17,.35)",
+        lime: "0 14px 34px -16px rgba(140,190,0,.55)",
       },
       keyframes: {
         drift: {

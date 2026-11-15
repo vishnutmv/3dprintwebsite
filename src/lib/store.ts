@@ -15,7 +15,7 @@ import { effectiveProductPrice, serverNow, setServerClock } from "./promotions";
 type CartLine = { product: Product; qty: number; lineTotal: number };
 
 const fallbackSettings: StoreSettings = {
-  storeName: "3D Print Co.",
+  storeName: "Zencmart",
   supportEmail: "orders@3dprintco.in",
   supportPhone: "+91 98400 00000",
   city: "Chennai",

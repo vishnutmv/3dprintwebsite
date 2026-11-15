@@ -76,7 +76,7 @@ export function RewardReveal() {
     context.textAlign = "center";
     context.fillText("Scratch to reveal your reward", element.width / 2, element.height / 2);
     context.font = "16px sans-serif";
-    context.fillText("3D Print Co. surprise", element.width / 2, element.height / 2 + 34);
+    context.fillText("Zencmart surprise", element.width / 2, element.height / 2 + 34);
   }, [reward]);
 
   const reveal = useCallback(async () => {
@@ -116,7 +116,7 @@ export function RewardReveal() {
         setShareStatus("This browser cannot share PDF files directly. The reward PDF has been downloaded.");
         return;
       }
-      await navigator.share({ title: "My 3D Print Co. reward", text: "Here is my revealed reward card.", files: [file] });
+      await navigator.share({ title: "My Zencmart reward", text: "Here is my revealed reward card.", files: [file] });
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") return;
       setError(caught instanceof Error ? caught.message : "The reward card could not be shared.");
@@ -169,7 +169,7 @@ export function RewardReveal() {
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-violet-400/10 text-violet-200">
           {reward ? <Sparkles className="h-7 w-7" /> : <Gift className="h-7 w-7" />}
         </div>
-        <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.22em] text-white/40">3D Print Co. reward</p>
+        <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.22em] text-white/40">Zencmart reward</p>
         <h1 className="mt-2 text-2xl font-semibold text-white">{reward ? "Congratulations!" : "A surprise is waiting"}</h1>
         {loading ? (
           <p className="mt-4 text-sm text-white/45"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Checking reward link…</p>
@@ -182,7 +182,7 @@ export function RewardReveal() {
               ))}
             </div>
             <div className="relative">
-              <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-violet-200/70">{reward.sponsor || "3D Print Co."} reward</p>
+              <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-violet-200/70">{reward.sponsor || "Zencmart"} reward</p>
               <p className="mt-3 text-2xl font-bold text-white">{reward.title}</p>
               {reward.description && <p className="mt-3 text-sm leading-relaxed text-white/70">{reward.description}</p>}
               {typeof reward.worth === "number" && reward.worth > 0 && <p className="mt-4 text-sm font-semibold text-mint">Reward value: {inr(reward.worth)}</p>}

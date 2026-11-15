@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Download, ReceiptText, X } from "lucide-react";
 import { StatusPill } from "@/components/ui";
+import { BRAND } from "@/lib/brand";
 import { fullDateTime, inr } from "@/lib/format";
 import { createInvoicePdf } from "@/lib/invoice";
 import { useStore } from "@/lib/store";
@@ -43,7 +44,7 @@ export function ReceiptModal({ order, onClose }: { order: Order; onClose: () => 
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[9.5px] font-bold uppercase tracking-[0.22em] text-violet-300">Order receipt</p>
-            <h2 className="mt-1 text-[24px]">{settings.storeName || "3D Print Co."}</h2>
+            <h2 className="mt-1 text-[24px]">{BRAND.name}</h2>
             <p className="mt-1 text-[11.5px] text-white/45">
               {[settings.city, settings.supportEmail].filter(Boolean).join(" · ")}
             </p>

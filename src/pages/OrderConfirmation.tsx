@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Download, Loader2, Lock, RefreshCw } from "lucide-react";
+import { PrintSuccess } from "@/components/PrintSuccess";
+import { BRAND } from "@/lib/brand";
 import { StatusPill } from "@/components/ui";
 import { apiGet, apiPost } from "@/lib/api";
 import { fullDateTime, inr } from "@/lib/format";
@@ -120,7 +122,7 @@ export function OrderConfirmation() {
       const session = await createPaymentSession(order.orderNumber, code);
       const callback = await openRazorpayCheckout({
         session,
-        storeName: settings.storeName,
+        storeName: BRAND.name,
         description: `Order ${order.orderNumber}`,
       });
       const updated = await verifyRazorpayPayment(callback);
@@ -162,6 +164,19 @@ export function OrderConfirmation() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
+      {paid && !demoMode && (
+        <div className="mb-4">
+          <PrintSuccess
+            orderNumber={order.orderNumber}
+            action={
+              <Link to="/account?tab=orders" className="btn-hero-primary">
+                View My Order
+              </Link>
+            }
+          />
+        </div>
+      )}
+
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -173,7 +188,11 @@ export function OrderConfirmation() {
               <StatusPill status={order.paymentStatus} />
               <StatusPill status={order.orderStatus} />
             </div>
-            <h1 className="mt-3 text-2xl font-semibold text-white">{order.orderNumber}</h1>
+            {paid && !demoMode ? (
+              <h2 className="mt-3 text-2xl font-semibold text-white">{order.orderNumber}</h2>
+            ) : (
+              <h1 className="mt-3 text-2xl font-semibold text-white">{order.orderNumber}</h1>
+            )}
             <p className="mt-1 text-sm text-white/40">
               {fullDateTime(order.createdAt)}
             </p>
@@ -293,8 +312,7 @@ export function OrderConfirmation() {
               type="button"
               onClick={() => void retryPayment()}
               disabled={paying}
-              className="on-accent rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-60"
-              style={{ background: "linear-gradient(135deg,#7c3aed,#ec4899)" }}
+              className="btn-primary px-5 py-2.5 text-sm disabled:opacity-60"
             >
               {paying ? (
                 <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Opening Razorpay…</span>

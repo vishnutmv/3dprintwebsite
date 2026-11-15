@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Page not found — 3D Print Co.</title>
+    <title>Page not found — Zencmart</title>
     <script>
       try {
         document.documentElement.dataset.theme =
@@ -17,23 +17,22 @@
     <style>
       :root {
         color-scheme: light;
-        --page: #f8f7f3;
+        --page: #f8f6f1;
         --surface: #ffffff;
-        --border: #eae8e1;
-        --text: #29312d;
-        --muted: #5b655c;
-        --accent: #b04c2c;
-        --accent-hover: #984326;
+        --border: #e3e0d6;
+        --text: #171917;
+        --muted: #5a5e57;
+        --lime: #c6ff00;
+        --accent: #4a6400;
       }
       [data-theme="dark"] {
         color-scheme: dark;
-        --page: #0d110f;
-        --surface: #161d19;
-        --border: #2a352e;
-        --text: #e6ece6;
-        --muted: #a7b2a9;
-        --accent: #e98957;
-        --accent-hover: #f0a07a;
+        --page: #111311;
+        --surface: #171917;
+        --border: #2b302a;
+        --text: #f5f5f0;
+        --muted: #b0b3ab;
+        --accent: #c6ff00;
       }
       * { box-sizing: border-box; }
       body {
@@ -42,46 +41,63 @@
         display: grid;
         place-items: center;
         padding: 24px;
-        background: var(--page);
+        background:
+          radial-gradient(60% 60% at 80% 0%, rgba(198, 255, 0, 0.1), transparent 70%),
+          var(--page);
         color: var(--text);
         font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
       }
       main {
-        width: min(100%, 620px);
+        width: min(100%, 600px);
         padding: clamp(28px, 6vw, 48px);
         border: 1px solid var(--border);
-        border-radius: 32px;
+        border-radius: 28px;
         background: var(--surface);
         text-align: center;
       }
       .mark {
         display: inline-grid;
-        width: 48px;
-        height: 48px;
+        width: 52px;
+        height: 52px;
         place-items: center;
-        border-radius: 16px;
-        background: linear-gradient(140deg, #f3bd8f, #d86e40 58%, #e0c47e);
-        color: #29312d;
-        font-size: 14px;
-        font-weight: 900;
+        border-radius: 15px;
+        background: var(--lime);
+        color: #111311;
+      }
+      .brand {
+        margin: 14px 0 0;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .brand span {
+        display: block;
+        margin-top: 4px;
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        color: var(--accent);
       }
       .eyebrow {
-        margin: 24px 0 0;
+        margin: 26px 0 0;
         color: var(--accent);
         font-size: 10px;
-        font-weight: 700;
+        font-weight: 800;
         letter-spacing: 0.24em;
         text-transform: uppercase;
       }
       h1 {
         margin: 12px 0 0;
-        font-size: clamp(30px, 6vw, 46px);
-        line-height: 1;
+        font-size: clamp(28px, 6vw, 44px);
+        line-height: 1.02;
         letter-spacing: -0.04em;
+        color: var(--text);
       }
+      h1 em { font-style: normal; color: var(--accent); }
       p {
         margin: 14px auto 0;
-        max-width: 430px;
+        max-width: 420px;
         color: var(--muted);
         font-size: 14px;
         line-height: 1.6;
@@ -97,30 +113,38 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-height: 44px;
-        padding: 0 20px;
+        min-height: 46px;
+        padding: 0 22px;
         border: 1px solid var(--border);
-        border-radius: 16px;
+        border-radius: 12px;
         color: var(--text);
         font-size: 13px;
-        font-weight: 600;
+        font-weight: 650;
         text-decoration: none;
+        transition: border-color .2s ease, background-color .2s ease;
       }
       a.primary {
         border-color: transparent;
-        background: var(--accent);
-        color: #fff;
+        background: var(--lime);
+        color: #111311;
+        font-weight: 750;
       }
       a:hover { border-color: var(--accent); }
-      a.primary:hover { background: var(--accent-hover); }
+      a.primary:hover { background: #d7ff38; }
       a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     </style>
   </head>
   <body>
     <main>
-      <span class="mark" aria-hidden="true">3D</span>
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none">
+          <path d="M12 2.6 21 7.6v8.8L12 21.4 3 16.4V7.6l9-5Z" fill="none" stroke="#111311" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M3.6 7.9 12 12.6l8.4-4.7M12 12.6v8.2" stroke="#111311" stroke-width="1.6" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <p class="brand">Zencmart<span>3D printing</span></p>
       <p class="eyebrow">404</p>
-      <h1>This page never got printed.</h1>
+      <h1>This page never <em>got printed.</em></h1>
       <p>The link is wrong, or the page moved. The catalogue is still where you left it.</p>
       <nav aria-label="404 navigation">
         <a href="/">Home</a>

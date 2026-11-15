@@ -281,7 +281,7 @@ export function AdminCollaborators() {
                 return (
                   <article key={prize.id} className="relative overflow-hidden rounded-2xl border border-violet-300/20 bg-gradient-to-br from-violet-500/15 via-ink-900 to-mint/10 p-4">
                     <div className="absolute -right-7 -top-8 h-24 w-24 rounded-full bg-violet-300/10 blur-2xl" />
-                    <p className="relative text-[9px] font-bold uppercase tracking-[0.16em] text-violet-200/70">{prize.sponsor || "3D Print Co."} · hidden reward card</p>
+                    <p className="relative text-[9px] font-bold uppercase tracking-[0.16em] text-violet-200/70">{prize.sponsor || "Zencmart"} · hidden reward card</p>
                     <h3 className="relative mt-2 text-[13px] font-semibold text-white">{prize.title}</h3>
                     <p className="relative mt-1 text-[10px] text-white/45">Scratch to reveal · {prize.availableQuantity ?? prize.quantity} of {prize.quantity} available</p>
                     {offer && <p className="relative mt-2 text-[10px] text-mint">{offer.rewardType.replace(/_/g, " ")} · {offerValueLabel(offer)}</p>}
