@@ -47,7 +47,7 @@ export function Testimonials() {
             <figcaption className="mt-auto border-t border-white/8 pt-3 text-[11px] text-white/40">
               <span className="font-semibold text-white/70">{review.authorName}</span>
               {review.productSlug && review.productName ? (
-                <> · <Link to={`/product/${review.productSlug}`} className="text-violet-200 hover:underline">{review.productName}</Link></>
+                <> · <Link to={`/product/${review.productSlug}`} className="text-violet-200 underline underline-offset-2 decoration-current/50 hover:decoration-current">{review.productName}</Link></>
               ) : null}
               <span className="block text-[10px] text-white/25">{shortDate(review.createdAt)}</span>
             </figcaption>

@@ -26,6 +26,7 @@ export function Cart() {
   if (lines.length === 0) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-28">
+        <h1 className="sr-only">Your cart</h1>
         <EmptyState
           title="Your cart is empty"
           copy="Nothing has been added yet. The catalogue has stock pieces and made-to-order work."

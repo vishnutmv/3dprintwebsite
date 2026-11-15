@@ -240,7 +240,7 @@ export function Account() {
       )}
 
       {loading ? (
-        <div className="glass mt-6 rounded-[2rem] p-10 text-center text-[12.5px] text-white/50">
+        <div className="glass mt-6 flex min-h-[520px] flex-col items-center justify-center rounded-[2rem] p-10 text-center text-[12.5px] text-white/50 md:min-h-[360px]">
           <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" /> Loading your profile…
         </div>
       ) : !data ? (

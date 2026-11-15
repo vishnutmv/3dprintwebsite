@@ -10,6 +10,9 @@ node_modules
 .wrangler
 .vercel
 dist
+.locked-rollup-temp
+playwright-report
+playwright-report-fixed
 .DS_Store
 *.tsbuildinfo
 *.pem

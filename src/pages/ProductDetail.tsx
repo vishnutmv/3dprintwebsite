@@ -26,18 +26,20 @@ export function ProductDetail() {
 
   if (!product) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-28 text-center">
-        <h1 className="text-[28px]">{loaded ? "That print does not exist." : "Loading product…"}</h1>
-        <p className="mt-2 text-sm text-white/50">
-          {loaded
-            ? "The link may be wrong, or the product was retired from the catalogue."
-            : "Fetching the latest catalogue from the studio database."}
-        </p>
-        {loaded && (
-          <Link to="/shop" className="btn-primary mt-6 inline-flex">
-            Back to shop
-          </Link>
-        )}
+      <div className="mx-auto grid min-h-[100svh] max-w-[1280px] place-items-center px-4">
+        <div className="max-w-xl text-center">
+          <h1 className="text-[28px]">{loaded ? "That print does not exist." : "Loading product…"}</h1>
+          <p className="mt-2 text-sm text-white/50">
+            {loaded
+              ? "The link may be wrong, or the product was retired from the catalogue."
+              : "Fetching the latest catalogue from the studio database."}
+          </p>
+          {loaded && (
+            <Link to="/shop" className="btn-primary mt-6 inline-flex">
+              Back to shop
+            </Link>
+          )}
+        </div>
       </div>
     );
   }

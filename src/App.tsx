@@ -36,7 +36,9 @@ const NotFound = lazy(() => import("./pages/NotFound").then((module) => ({ defau
 
 function RouteLoading() {
   return (
-    <div className="mx-auto grid min-h-[45vh] max-w-6xl place-items-center px-4">
+    // Reserve the first viewport while a route loads. The footer then starts
+    // below the fold instead of jumping down when the page content arrives.
+    <div className="mx-auto grid min-h-[100svh] max-w-6xl place-items-center px-4">
       <div className="skeleton h-64 w-full rounded-3xl" aria-label="Loading page" />
     </div>
   );
@@ -46,45 +48,56 @@ function page(element: ReactNode) {
   return <Suspense fallback={<RouteLoading />}>{element}</Suspense>;
 }
 
-const router = createBrowserRouter([
+const router = createBrowserRouter(
+  [
+    {
+      element: <SiteLayout />,
+      children: [
+        { path: "/", element: page(<Home />) },
+        { path: "/shop", element: page(<Shop />) },
+        { path: "/product/:slug", element: page(<ProductDetail />) },
+        { path: "/cart", element: page(<Cart />) },
+        { path: "/checkout", element: page(<Checkout />) },
+        { path: "/order/:id", element: page(<OrderConfirmation />) },
+        { path: "/account", element: page(<Account />) },
+        { path: "/rewards", element: page(<Rewards />) },
+        { path: "/reward/:token", element: page(<RewardReveal />) },
+        { path: "/terms", element: page(<Terms />) },
+        { path: "/privacy", element: page(<Privacy />) },
+        { path: "*", element: page(<NotFound />) },
+      ],
+    },
+    {
+      path: "/admin",
+      element: <AdminLayout />,
+      children: [
+        { index: true, element: page(<Dashboard />) },
+        { path: "products", element: page(<AdminProducts />) },
+        { path: "orders", element: page(<AdminOrders />) },
+        { path: "dispatch", element: page(<AdminDispatch />) },
+        { path: "customers", element: page(<AdminCustomers />) },
+        { path: "reviews", element: page(<AdminReviews />) },
+        { path: "leads", element: page(<AdminLeads />) },
+        { path: "prizes", element: page(<AdminPrizes />) },
+        { path: "collaborators", element: page(<AdminCollaborators />) },
+        { path: "insights", element: page(<AdminInsights />) },
+        { path: "campaigns", element: page(<AdminCampaigns />) },
+        { path: "settings", element: page(<AdminSettings />) },
+        { path: "*", element: <Navigate to="/admin" replace /> },
+      ],
+    },
+  ],
   {
-    element: <SiteLayout />,
-    children: [
-      { path: "/", element: page(<Home />) },
-      { path: "/shop", element: page(<Shop />) },
-      { path: "/product/:slug", element: page(<ProductDetail />) },
-      { path: "/cart", element: page(<Cart />) },
-      { path: "/checkout", element: page(<Checkout />) },
-      { path: "/order/:id", element: page(<OrderConfirmation />) },
-      { path: "/account", element: page(<Account />) },
-      { path: "/rewards", element: page(<Rewards />) },
-      { path: "/reward/:token", element: page(<RewardReveal />) },
-      { path: "/terms", element: page(<Terms />) },
-      { path: "/privacy", element: page(<Privacy />) },
-      { path: "*", element: page(<NotFound />) },
-    ],
+    future: {
+      v7_fetcherPersist: true,
+      v7_normalizeFormMethod: true,
+      v7_partialHydration: true,
+      v7_relativeSplatPath: true,
+      v7_skipActionErrorRevalidation: true,
+    },
   },
-  {
-    path: "/admin",
-    element: <AdminLayout />,
-    children: [
-      { index: true, element: page(<Dashboard />) },
-      { path: "products", element: page(<AdminProducts />) },
-      { path: "orders", element: page(<AdminOrders />) },
-      { path: "dispatch", element: page(<AdminDispatch />) },
-      { path: "customers", element: page(<AdminCustomers />) },
-      { path: "reviews", element: page(<AdminReviews />) },
-      { path: "leads", element: page(<AdminLeads />) },
-      { path: "prizes", element: page(<AdminPrizes />) },
-      { path: "collaborators", element: page(<AdminCollaborators />) },
-      { path: "insights", element: page(<AdminInsights />) },
-      { path: "campaigns", element: page(<AdminCampaigns />) },
-      { path: "settings", element: page(<AdminSettings />) },
-      { path: "*", element: <Navigate to="/admin" replace /> },
-    ],
-  },
-]);
+);
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  return <RouterProvider router={router} future={{ v7_startTransition: true }} />;
 }

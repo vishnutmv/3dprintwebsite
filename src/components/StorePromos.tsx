@@ -128,8 +128,12 @@ export function StorePromos() {
         <span className="hidden items-center gap-1 sm:flex">
           <Clock3 className="h-3.5 w-3.5" /> Rewards window resets in {minutesLeft} min
         </span>
-        <Link to={promo.to} className="grid h-7 w-7 place-items-center rounded-full bg-white text-ink-950">
-          <ArrowRight className="h-3.5 w-3.5" />
+        <Link
+          to={promo.to}
+          className="grid h-7 w-7 place-items-center rounded-full bg-white text-ink-950"
+          aria-label={promo.text}
+        >
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>
       </div>
     </div>
