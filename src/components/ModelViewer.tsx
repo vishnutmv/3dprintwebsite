@@ -26,7 +26,7 @@ type ViewerBoundaryProps = { children: ReactNode; fallback: ReactNode };
  * A broken or CORS-blocked GLB must never take down the product route. The
  * viewer degrades to a static panel and the gallery stays usable.
  */
-class ViewerBoundary extends Component<ViewerBoundaryProps, { failed: boolean }> {
+export class ViewerBoundary extends Component<ViewerBoundaryProps, { failed: boolean }> {
   state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -50,7 +50,7 @@ type ProbeState = "none" | "checking" | "ready" | "failed";
  * domain) gets a blocked fetch, and three.js throws that straight into the
  * route. Probe the file first so an unreachable model never reaches the loader.
  */
-function useModelProbe(url?: string): ProbeState {
+export function useModelProbe(url?: string): ProbeState {
   const [state, setState] = useState<ProbeState>(url ? "checking" : "none");
 
   useEffect(() => {

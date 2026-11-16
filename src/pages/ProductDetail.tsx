@@ -93,7 +93,7 @@ export function ProductDetail() {
   };
 
   return (
-    <div className="mx-auto max-w-[1320px] px-4 pb-16 pt-24 md:pt-28">
+    <div className="mx-auto max-w-[1320px] px-4 pb-28 pt-24 md:pt-28 lg:pb-16">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-[11px] text-[color:var(--faint)]">
         <Link to="/" className="hover:text-[color:var(--text)]">Home</Link>
         <ChevronRight className="h-3 w-3" />
@@ -345,6 +345,27 @@ export function ProductDetail() {
       </div>
 
       <ProductReviews product={product} />
+
+      {/* Phone checkout bar: keep price and Add to Cart reachable while scrolling. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[color:var(--border)] bg-[color:var(--surface)]/95 px-4 py-3 backdrop-blur lg:hidden">
+        <div className="mx-auto flex max-w-[560px] items-center gap-3">
+          <div className="min-w-0">
+            <p className="num text-[15px] font-bold leading-none text-[color:var(--heading)]">{inr(price)}</p>
+            <p className="mt-1 truncate text-[10px] text-[color:var(--faint)]">
+              {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={add}
+            disabled={product.stock <= 0}
+            className="btn-primary flex-1 py-3"
+          >
+            <ShoppingBag className="h-4 w-4" />
+            {inCart > 0 ? "Add another" : "Add to Cart"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

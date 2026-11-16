@@ -19,7 +19,7 @@ import {
   Truck,
   Wrench,
 } from "lucide-react";
-import { ProductCard } from "@/components/ProductCard";
+import { Product3DSlider } from "@/components/Product3DSlider";
 import { PromotionBanner } from "@/components/PromotionBanner";
 import { StorePromos } from "@/components/StorePromos";
 import { Testimonials } from "@/components/Testimonials";
@@ -46,7 +46,6 @@ export function Home() {
   const products = useStore((state) => state.products) ?? [];
   const prizes = useStore((state) => state.prizes) ?? [];
   const loaded = useStore((state) => state.loaded);
-  const message = useStore((state) => state.message);
   const whatsappContactUrl = useStore((state) => state.settings.whatsappContactUrl);
   const now = usePromotionClock();
 
@@ -237,71 +236,12 @@ export function Home() {
         )}
       </section>
 
+      <div className="mt-12">
+        <Product3DSlider products={products} />
+      </div>
+
       <PromotionBanner products={products} />
       <StorePromos />
-
-      {/* Catalogue */}
-      <section className="mt-12">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--accent)]">
-              Catalogue
-            </p>
-            <h2 className="mt-1.5 text-[clamp(22px,3vw,32px)]">Featured prints</h2>
-            <p className="mt-1 text-[12.5px] text-[color:var(--muted)]">
-              Browse available products and their published specifications.
-            </p>
-          </div>
-          <Link
-            to="/shop"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-2.5 text-[12px] font-semibold text-[color:var(--text)] transition hover:border-[color:var(--border-strong)]"
-          >
-            View all products <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {featured.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-        {featured.length === 0 && (
-          <div className="glass-soft rounded-2xl px-4 py-8 text-center text-[12.5px] text-[color:var(--muted)]">
-            {loaded ? message ?? "No products are published yet." : "Loading the catalogue…"}
-          </div>
-        )}
-      </section>
-
-      {/* How it works */}
-      <section className="mt-12 overflow-hidden rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface)]">
-        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[color:var(--border)] px-5 py-5 md:px-7">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--accent)]">
-              How it works
-            </p>
-            <h2 className="mt-1.5 text-[clamp(20px,2.6vw,26px)]">From file to doorstep</h2>
-          </div>
-          <Link to="/shop" className="text-[11.5px] font-semibold text-[color:var(--accent)] hover:underline">
-            Start printing →
-          </Link>
-        </div>
-        <div className="grid gap-px bg-[color:var(--border)] sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { step: "01", title: "Pick your print", copy: "Choose stock pieces or send a file for a made-to-order quote." },
-            { step: "02", title: "We print it", copy: "Each order is produced in small batches after it is placed." },
-            { step: "03", title: "Secure checkout", copy: "This deployment uses Razorpay Test Mode; no real money is collected." },
-            { step: "04", title: "Track your order", copy: "Check status with the customer ID issued at checkout." },
-          ].map((item) => (
-            <div key={item.step} className="bg-[color:var(--surface)] px-5 py-5">
-              <span className="num text-[10px] font-bold tracking-[0.2em] text-[color:var(--accent)]">
-                {item.step}
-              </span>
-              <p className="mt-2 text-[13px] font-semibold text-[color:var(--heading)]">{item.title}</p>
-              <p className="mt-1 text-[11.5px] leading-relaxed text-[color:var(--muted)]">{item.copy}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
       <Testimonials />
 
