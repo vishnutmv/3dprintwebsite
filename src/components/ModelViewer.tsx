@@ -7,10 +7,118 @@
  *      so the 3D experience is visible before the client supplies models.
  */
 
-import { Suspense, useMemo } from "react";
+import {
+  Component,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { Canvas } from "@react-three/fiber";
 import { Bounds, ContactShadows, OrbitControls, useGLTF } from "@react-three/drei";
 import type { ModelVariant, Product } from "@/lib/types";
+
+type ViewerBoundaryProps = { children: ReactNode; fallback: ReactNode };
+
+/**
+ * A broken or CORS-blocked GLB must never take down the product route. The
+ * viewer degrades to a static panel and the gallery stays usable.
+ */
+class ViewerBoundary extends Component<ViewerBoundaryProps, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.warn("3D model failed to load; showing a static fallback.", error);
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+type ProbeState = "none" | "checking" | "ready" | "failed";
+
+/**
+ * The uploaded GLB usually lives on the studio's file host, which only allows
+ * the production origin through CORS. Any other deployment (preview, custom
+ * domain) gets a blocked fetch, and three.js throws that straight into the
+ * route. Probe the file first so an unreachable model never reaches the loader.
+ */
+function useModelProbe(url?: string): ProbeState {
+  const [state, setState] = useState<ProbeState>(url ? "checking" : "none");
+
+  useEffect(() => {
+    if (!url) {
+      setState("none");
+      return;
+    }
+
+    // In-session object URLs cannot be probed with HEAD, and need no check.
+    if (/^(blob:|data:)/i.test(url)) {
+      setState("ready");
+      return;
+    }
+
+    setState("checking");
+    const controller = new AbortController();
+    let active = true;
+
+    fetch(url, { method: "HEAD", signal: controller.signal })
+      .then((response) => {
+        if (!active) return;
+        // A HEAD the host does not implement says nothing about the file.
+        setState(response.ok || response.status === 405 ? "ready" : "failed");
+      })
+      .catch(() => {
+        // Network down, or the response was not exposed to this origin.
+        if (active) setState("failed");
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [url]);
+
+  return state;
+}
+
+function ModelFallback({ image }: { image?: string }) {
+  return (
+    <div className="relative grid h-full w-full place-items-center overflow-hidden bg-[color:var(--surface-soft)]">
+      {image ? (
+        <img src={image} alt="" className="absolute inset-0 h-full w-full object-cover opacity-80" />
+      ) : (
+        <span
+          aria-hidden
+          className="h-24 w-24 rounded-[28px]"
+          style={{ background: "radial-gradient(70% 70% at 35% 25%, #d7ff38, #5f7d00)" }}
+        />
+      )}
+      <div className="relative m-4 max-w-[270px] rounded-2xl border border-white/10 bg-[#111311] px-4 py-3 text-center shadow-lg">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#c6ff00]">
+          3D preview unavailable
+        </p>
+        <p className="mt-1 text-[11px] leading-relaxed text-[#d6dacf]">
+          Use the gallery images, or reload once the model file is reachable.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CanvasFailureNotice({ onFail }: { onFail: () => void }) {
+  useEffect(() => {
+    onFail();
+  }, [onFail]);
+  return null;
+}
 
 function UploadedModel({ url }: { url: string }) {
   const { scene } = useGLTF(url);
@@ -138,11 +246,39 @@ export function ModelViewer({
 }: ModelViewerProps) {
   const shape = variant ?? product?.variant ?? "lattice";
   const tint = accent ?? product?.accent ?? "#a78bfa";
-  const url = modelUrl ?? product?.modelUrl;
+  const requestedUrl = modelUrl ?? product?.modelUrl;
+  const probe = useModelProbe(requestedUrl);
+  const url = probe === "ready" ? requestedUrl : undefined;
+  const fallbackImage = product?.images?.[0] ?? product?.imageUrl;
+  const [canvasFailed, setCanvasFailed] = useState(false);
+  const markCanvasFailed = useCallback(() => setCanvasFailed(true), []);
+
+  // A new model target deserves a fresh attempt at the canvas.
+  useEffect(() => setCanvasFailed(false), [requestedUrl]);
+
+  if (probe === "failed" || canvasFailed) {
+    return (
+      <div className={className ?? heightClass ?? "h-[380px] w-full"}>
+        <ModelFallback image={fallbackImage} />
+      </div>
+    );
+  }
+
+  if (probe === "checking") {
+    return (
+      <div className={className ?? heightClass ?? "h-[380px] w-full"}>
+        <div className="skeleton h-full w-full" aria-label="Loading 3D preview" />
+      </div>
+    );
+  }
 
   return (
     <div className={className ?? heightClass ?? "h-[380px] w-full"}>
-      <Canvas
+      <ViewerBoundary
+        key={url ?? "placeholder"}
+        fallback={<ModelFallback image={fallbackImage} />}
+      >
+        <Canvas
         className="cursor-grab active:cursor-grabbing"
         camera={{ position: [0, 0.4, 3.4], fov: 42 }}
         gl={{ antialias: true, alpha: true }}
@@ -151,14 +287,20 @@ export function ModelViewer({
         <ambientLight intensity={0.75} />
         <directionalLight position={[4, 6, 5]} intensity={1.6} />
         <directionalLight position={[-5, -2, -4]} intensity={0.45} />
+        {/* Scene errors surface inside the canvas root, not in the DOM above it. */}
         <Suspense fallback={null}>
-          <Bounds fit clip observe margin={1.25}>
-            {url ? (
-              <UploadedModel url={url} />
-            ) : (
-              <Placeholder variant={shape} accent={tint} />
-            )}
-          </Bounds>
+          <ViewerBoundary
+            key={url ?? "placeholder"}
+            fallback={<CanvasFailureNotice onFail={markCanvasFailed} />}
+          >
+            <Bounds fit clip observe margin={1.25}>
+              {url ? (
+                <UploadedModel url={url} />
+              ) : (
+                <Placeholder variant={shape} accent={tint} />
+              )}
+            </Bounds>
+          </ViewerBoundary>
         </Suspense>
         <ContactShadows
           position={[0, -1.05, 0]}
@@ -174,7 +316,8 @@ export function ModelViewer({
           minDistance={2}
           maxDistance={6}
         />
-      </Canvas>
+        </Canvas>
+      </ViewerBoundary>
     </div>
   );
 }

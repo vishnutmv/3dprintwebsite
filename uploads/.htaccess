@@ -6,7 +6,9 @@ Options -Indexes
   RemoveHandler .php .phtml .phar
   RemoveType .php .phtml .phar
 </IfModule>
+# Product media is public. Allow any storefront origin so preview deployments
+# (which get a new *.vercel.app URL) can load GLB models and images.
 <IfModule mod_headers.c>
-  Header always set Access-Control-Allow-Origin "https://3dprintwebsite-tau.vercel.app"
+  Header always set Access-Control-Allow-Origin "*"
   Header always set Vary "Origin"
 </IfModule>
