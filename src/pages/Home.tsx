@@ -1,25 +1,23 @@
 /**
- * Home page — premium hero, category showcase, live product grid and rewards.
+ * Home page — Amazon-style storefront landing: promo banner, category cards,
+ * horizontal deal/best-seller rails and the studio's 3D showcase.
  */
 
+import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
-  ArrowUpRight,
-  Box,
-  Gamepad2,
+  ChevronLeft,
+  ChevronRight,
   Gift,
-  Headphones,
-  Home as HomeIcon,
   Layers,
   MessageCircle,
-  Package,
   ShieldCheck,
   Sparkles,
   Truck,
-  Wrench,
 } from "lucide-react";
 import { Product3DSlider } from "@/components/Product3DSlider";
+import { ProductCard } from "@/components/ProductCard";
 import { PromotionBanner } from "@/components/PromotionBanner";
 import { StorePromos } from "@/components/StorePromos";
 import { Testimonials } from "@/components/Testimonials";
@@ -28,18 +26,81 @@ import { effectiveProductPrice, usePromotionClock } from "@/lib/promotions";
 import { useStore } from "@/lib/store";
 import type { Product } from "@/lib/types";
 
-const CATEGORY_ICONS = [Box, HomeIcon, Wrench, Gamepad2, Layers, Headphones, Package, Sparkles];
+/** Horizontal product rail with Amazon-style arrow controls. */
+function ProductRail({ products }: { products: Product[] }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ start: true, end: false });
 
-function categoryIcon(category: string, index: number) {
-  const name = category.toLowerCase();
-  if (name.includes("figur") || name.includes("mini")) return Box;
-  if (name.includes("decor") || name.includes("home")) return HomeIcon;
-  if (name.includes("gadget") || name.includes("tool")) return Wrench;
-  if (name.includes("game") || name.includes("console")) return Gamepad2;
-  if (name.includes("desk") || name.includes("organ")) return Layers;
-  if (name.includes("audio") || name.includes("head")) return Headphones;
-  if (name.includes("part") || name.includes("spare")) return Package;
-  return CATEGORY_ICONS[index % CATEGORY_ICONS.length];
+  const measure = useCallback(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    setEdges({
+      start: track.scrollLeft <= 4,
+      end: track.scrollLeft + track.clientWidth >= track.scrollWidth - 4,
+    });
+  }, []);
+
+  const scrollBy = (direction: 1 | -1) => {
+    const track = trackRef.current;
+    if (!track) return;
+    track.scrollBy({ left: direction * Math.max(220, track.clientWidth * 0.8), behavior: "smooth" });
+  };
+
+  return (
+    <div className="relative">
+      <div ref={trackRef} onScroll={measure} className="amz-rail no-scrollbar -mx-1 px-1">
+        {products.map((product) => (
+          <div key={product.id} className="w-[178px] sm:w-[196px]">
+            <ProductCard product={product} />
+          </div>
+        ))}
+      </div>
+      {!edges.start && (
+        <button
+          type="button"
+          onClick={() => scrollBy(-1)}
+          className="rail-arrow absolute -left-2 top-[38%] hidden shadow-md sm:grid"
+          aria-label="Scroll products left"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+      )}
+      {!edges.end && (
+        <button
+          type="button"
+          onClick={() => scrollBy(1)}
+          className="rail-arrow absolute -right-2 top-[38%] hidden shadow-md sm:grid"
+          aria-label="Scroll products right"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Section({
+  title,
+  to,
+  children,
+}: {
+  title: string;
+  to?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="amz-card p-4 sm:p-5">
+      <div className="amz-row-head">
+        <h2 className="amz-section-title">{title}</h2>
+        {to && (
+          <Link to={to} className="amz-link shrink-0 text-[13px]">
+            See all
+          </Link>
+        )}
+      </div>
+      <div className="mt-3.5">{children}</div>
+    </section>
+  );
 }
 
 export function Home() {
@@ -49,255 +110,282 @@ export function Home() {
   const whatsappContactUrl = useStore((state) => state.settings.whatsappContactUrl);
   const now = usePromotionClock();
 
-  const featured = products.slice(0, 8);
-  const heroProduct = featured[0];
+  const heroProduct = products.find((product) => product.imageUrl) ?? products[0];
   const openPrizes = prizes.filter((prize) => prize.status === "open");
   const topPrize = openPrizes.reduce((best, prize) => (prize.worth > best ? prize.worth : best), 0);
 
-  const categories = Array.from(new Set(products.map((product) => product.category).filter(Boolean))).slice(0, 6);
+  const deals = products
+    .filter((product) => product.mrp && product.mrp > effectiveProductPrice(product, now))
+    .sort((a, b) => {
+      const offA = 1 - effectiveProductPrice(a, now) / (a.mrp ?? 1);
+      const offB = 1 - effectiveProductPrice(b, now) / (b.mrp ?? 1);
+      return offB - offA;
+    })
+    .slice(0, 10);
+
+  const bestSellers = [...products]
+    .sort((a, b) => b.rating * b.reviews - a.rating * a.reviews)
+    .slice(0, 10);
+
+  const categories = Array.from(new Set(products.map((product) => product.category).filter(Boolean))).slice(0, 8);
   const categoryPreview = (category: string): Product | undefined =>
     products.find((product) => product.category === category && product.imageUrl) ??
     products.find((product) => product.category === category);
 
   return (
-    <div className="mx-auto max-w-[1320px] px-4 pb-16 pt-24 md:pt-28">
-      {/* Hero */}
-      <section className="hero-shell p-5 sm:p-7 md:p-10 lg:p-12">
-        <div className="grid items-center gap-8 lg:grid-cols-[1.02fr_0.98fr] lg:gap-10">
-          <div className="relative z-10 max-w-2xl">
-            <span className="hero-eyebrow">
-              <Sparkles className="h-3.5 w-3.5" /> Premium 3D prints
+    <div className="pb-10">
+      {/* Hero banner */}
+      <section className="hero-banner">
+        <div className="relative z-10 mx-auto grid max-w-[1500px] items-center gap-6 px-4 pb-24 pt-8 sm:px-6 md:min-h-[360px] md:pb-28 lg:grid-cols-[1.1fr_0.9fr] lg:pt-12">
+          <div className="max-w-2xl text-[#ffffff]">
+            <span className="inline-flex items-center gap-1.5 rounded-sm bg-[#febd69] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-[#131921]">
+              <Sparkles className="h-3.5 w-3.5" /> {loaded ? "Studio collection" : "Loading catalogue"}
             </span>
-
-            <h1 className="hero-title mt-5 text-[clamp(38px,6.4vw,68px)]">
-              Bring Ideas to
+            <h1 className="mt-4 text-[clamp(30px,5vw,52px)] font-extrabold leading-[1.05] text-[#ffffff]">
+              3D-printed products,
               <br />
-              Life <span className="hero-lime">in 3D</span>
+              made to order and delivered.
             </h1>
-
-            <p className="hero-copy mt-4 max-w-[520px] text-[13.5px] leading-relaxed sm:text-[15px]">
-              High-quality, precision 3D-printed products for creators, gamers, collectors
-              and everyday life. Made to order in Chennai.
+            <p className="mt-3 max-w-[520px] text-[14px] leading-relaxed text-[#d5dbdb]">
+              Precision prints for desks, shelves and everyday use. Small batches, durable
+              materials and free shipping across Tamil Nadu on larger orders.
             </p>
-
-            <div className="mt-7 flex flex-wrap gap-2.5 sm:gap-3">
-              <Link to="/shop" className="btn-hero-primary">
-                Shop Collection <ArrowRight className="h-4 w-4" />
+            <div className="mt-6 flex flex-wrap gap-2.5">
+              <Link to="/shop" className="btn-primary px-5 py-2.5 text-[14px]">
+                Shop all products
               </Link>
-              {whatsappContactUrl ? (
+              <Link
+                to="/shop"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/45 px-5 py-2.5 text-[14px] font-semibold text-[#ffffff] transition hover:border-white hover:bg-white/10"
+              >
+                Today's deals <ArrowRight className="h-4 w-4" />
+              </Link>
+              {whatsappContactUrl && (
                 <a
                   href={whatsappContactUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="btn-hero-ghost"
+                  className="inline-flex items-center gap-2 rounded-lg px-3 py-2.5 text-[14px] font-semibold text-[#febd69] hover:underline"
                 >
-                  Custom Print <MessageCircle className="h-4 w-4" />
+                  <MessageCircle className="h-4 w-4" /> Custom print
                 </a>
-              ) : (
-                <Link to="/shop" className="btn-hero-ghost">
-                  Custom Print <ArrowRight className="h-4 w-4" />
-                </Link>
               )}
             </div>
+            <div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-[12px] text-[#ccd1d1]">
+              <span className="inline-flex items-center gap-1.5">
+                <Truck className="h-4 w-4 text-[#febd69]" /> Fast delivery
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <ShieldCheck className="h-4 w-4 text-[#febd69]" /> Print quality checked
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Layers className="h-4 w-4 text-[#febd69]" /> Printed to order
+              </span>
+            </div>
+          </div>
 
-            <div className="hero-trust mt-8 grid grid-cols-1 gap-4 pt-5 sm:grid-cols-3 sm:gap-0">
+          {/* Featured deal card */}
+          <div className="relative mx-auto w-full max-w-[380px]">
+            {heroProduct ? (
+              <Link
+                to={`/product/${heroProduct.slug}`}
+                className="block overflow-hidden rounded-lg bg-white shadow-[0_20px_50px_-20px_rgba(0,0,0,.7)]"
+              >
+                <div className="flex items-center justify-between bg-[#cc0c39] px-3 py-1.5">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#ffffff]">
+                    Deal of the day
+                  </span>
+                  <span className="rounded-sm bg-white px-1.5 py-0.5 text-[10px] font-bold text-[#cc0c39]">
+                    Limited
+                  </span>
+                </div>
+                <div className="grid aspect-[4/3] place-items-center bg-white p-3">
+                  <img src={heroProduct.imageUrl} alt={heroProduct.name} className="h-full w-full object-contain" />
+                </div>
+                <div className="px-4 pb-4">
+                  <p className="line-clamp-2 text-[14px] leading-snug text-[#0f1111]">{heroProduct.name}</p>
+                  <p className="mt-1.5 flex items-baseline gap-2">
+                    <span className="text-[22px] font-bold text-[#0f1111]">
+                      {inr(effectiveProductPrice(heroProduct, now))}
+                    </span>
+                    {heroProduct.mrp && heroProduct.mrp > effectiveProductPrice(heroProduct, now) && (
+                      <span className="text-[12px] text-[#565959] line-through">{inr(heroProduct.mrp)}</span>
+                    )}
+                  </p>
+                  <span className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-[#007185]">
+                    View product <ArrowRight className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+              </Link>
+            ) : (
+              <div className="grid aspect-[4/3] place-items-center rounded-lg border border-[#3a4553] bg-white/5">
+                <div className="h-24 w-24 rounded-[26%] bg-gradient-to-br from-[#febd69] to-[#f08804] shadow-2xl" />
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="hero-fade" />
+      </section>
+
+      <div className="relative z-10 mx-auto -mt-16 max-w-[1500px] space-y-4 px-3 sm:-mt-20 sm:px-4">
+        {/* Category cards */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {categories.slice(0, 4).map((category) => {
+            const preview = categoryPreview(category);
+            return (
+              <Link
+                key={category}
+                to={`/shop?category=${encodeURIComponent(category)}`}
+                className="cat-card p-3.5"
+              >
+                <h2 className="text-[16px] font-bold leading-tight">{category}</h2>
+                <div className="mt-2 aspect-[4/3] overflow-hidden bg-[color:var(--surface)]">
+                  {preview?.imageUrl ? (
+                    <img src={preview.imageUrl} alt="" loading="lazy" className="h-full w-full object-contain" />
+                  ) : (
+                    <div className="grid h-full place-items-center">
+                      <span className="grid h-14 w-14 place-items-center rounded-lg bg-[color:var(--surface-soft)] text-[color:var(--accent)]">
+                        <Sparkles className="h-6 w-6" />
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <span className="mt-2.5 inline-block text-[13px] font-medium text-[color:var(--accent)]">
+                  Shop now
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+
+        <StorePromos />
+
+        {categories.length === 0 && (
+          <div className="amz-card px-4 py-8 text-center text-[13px] text-[color:var(--muted)]">
+            {loaded ? "Products appear here once the studio publishes the catalogue." : "Loading the catalogue…"}
+          </div>
+        )}
+
+        <PromotionBanner products={products} />
+
+        {/* Deals rail */}
+        {deals.length > 0 && (
+          <Section title="Deals on 3D prints" to="/shop">
+            <ProductRail products={deals} />
+          </Section>
+        )}
+
+        {/* Best sellers */}
+        {bestSellers.length > 0 && (
+          <Section title="Best sellers in the studio" to="/shop">
+            <ProductRail products={bestSellers} />
+          </Section>
+        )}
+
+        {/* Category strip */}
+        {categories.length > 4 && (
+          <Section title="Shop by category" to="/shop">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {categories.map((category) => {
+                const preview = categoryPreview(category);
+                return (
+                  <Link
+                    key={category}
+                    to={`/shop?category=${encodeURIComponent(category)}`}
+                    className="group rounded-md border border-[color:var(--border)] p-2 transition hover:border-[color:var(--border-strong)] hover:shadow-sm"
+                  >
+                    <div className="grid aspect-square place-items-center overflow-hidden bg-[color:var(--surface)]">
+                      {preview?.imageUrl ? (
+                        <img
+                          src={preview.imageUrl}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                        />
+                      ) : (
+                        <Sparkles className="h-7 w-7 text-[color:var(--border-strong)]" />
+                      )}
+                    </div>
+                    <p className="mt-1.5 truncate text-center text-[12.5px] font-medium text-[color:var(--heading)]">
+                      {category}
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+          </Section>
+        )}
+
+        {/* Info cards */}
+        <div className="grid gap-4 lg:grid-cols-[1.15fr_1fr]">
+          <section className="amz-card overflow-hidden p-5 sm:p-6">
+            <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--accent-strong)]">
+              <Gift className="h-4 w-4" /> Rewards programme
+            </span>
+            <h2 className="mt-2 text-[22px] font-bold leading-tight">Partner offers and studio rewards.</h2>
+            <p className="mt-1.5 max-w-[460px] text-[13px] leading-relaxed text-[color:var(--muted)]">
+              Browse current offers and their eligibility details. Reward assignments are managed
+              manually by the studio after a qualifying order.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-6 border-y border-[color:var(--border-soft)] py-3">
+              <div>
+                <p className="num text-[20px] font-bold text-[color:var(--heading)]">{inr(topPrize)}</p>
+                <p className="text-[12px] text-[color:var(--muted)]">Top prize</p>
+              </div>
+              <div>
+                <p className="num text-[20px] font-bold text-[color:var(--heading)]">{openPrizes.length}</p>
+                <p className="text-[12px] text-[color:var(--muted)]">Open prizes</p>
+              </div>
+              <div>
+                <p className="text-[20px] font-bold text-[color:var(--heading)]">Manual</p>
+                <p className="text-[12px] text-[color:var(--muted)]">Assignment method</p>
+              </div>
+            </div>
+            <Link to="/rewards" className="btn-primary mt-4">
+              How prizes work <ArrowRight className="h-4 w-4" />
+            </Link>
+          </section>
+
+          <section className="amz-card p-5 sm:p-6">
+            <h2 className="text-[22px] font-bold leading-tight">Why customers come back</h2>
+            <div className="mt-3 divide-y divide-[color:var(--border-soft)]">
               {[
-                { icon: Truck, title: "Fast delivery", copy: "Shipped across India" },
-                { icon: ShieldCheck, title: "Print quality", copy: "Precision & durable" },
-                { icon: Layers, title: "Small batches", copy: "Printed to order" },
-              ].map((item, index) => (
-                <div
-                  key={item.title}
-                  className={`hero-trust-item flex items-center gap-2.5 ${
-                    index > 0 ? "sm:pl-4" : ""
-                  }`}
-                >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#c6ff00]/25 bg-[#c6ff00]/10 text-[#c6ff00]">
-                    <item.icon className="h-4 w-4" />
-                  </span>
-                  <span>
-                    <span className="block text-[11.5px] font-semibold text-[#eef0e8]">{item.title}</span>
-                    <span className="block text-[10.5px] text-[#8f948b]">{item.copy}</span>
-                  </span>
+                { title: "Product details", copy: "Review available materials, dimensions and other published specifications." },
+                { title: "Custom projects", copy: "Contact the studio to discuss a part or print not listed in the catalogue." },
+                { title: "Customer ID", copy: "Use the ID issued at checkout to look up your order history." },
+              ].map((item) => (
+                <div key={item.title} className="py-2.5 first:pt-0 last:pb-0">
+                  <p className="text-[13px] font-bold text-[color:var(--heading)]">{item.title}</p>
+                  <p className="mt-0.5 text-[12.5px] leading-relaxed text-[color:var(--muted)]">{item.copy}</p>
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Product visual */}
-          <div className="relative">
-            <div className="hero-visual-frame aspect-[4/3.35] w-full sm:aspect-[4/3]">
-              {heroProduct?.imageUrl ? (
-                <img
-                  src={heroProduct.imageUrl}
-                  alt={heroProduct.name}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <>
-                  <div className="hero-ring h-[86%] w-[86%]" />
-                  <div className="hero-ring h-[64%] w-[64%] border-[#c6ff00]/35" />
-                  <div className="hero-object" />
-                  <div className="hero-plinth" />
-                  <div className="absolute left-[13%] top-[12%] h-[46%] w-[1px] bg-gradient-to-b from-transparent via-white/15 to-transparent" />
-                  <div className="absolute right-[12%] top-[8%] h-[58%] w-[1px] bg-gradient-to-b from-transparent via-[#c6ff00]/25 to-transparent" />
-                  <span className="absolute left-5 top-5 rounded-full border border-white/15 bg-black/30 px-3 py-1 text-[9px] font-bold uppercase tracking-[0.16em] text-[#d7ff38] backdrop-blur">
-                    Printed layer by layer
-                  </span>
-                </>
-              )}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-4 pt-12">
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#c6ff00]">
-                      {heroProduct ? heroProduct.category : "Studio collection"}
-                    </p>
-                    <p className="mt-1 text-[15px] font-semibold leading-tight text-[#f7f8f2]">
-                      {heroProduct ? heroProduct.name : "Made to order, printed fresh"}
-                    </p>
-                    {heroProduct && (
-                      <p className="mt-0.5 text-[12px] font-semibold text-[#e7eae1]">
-                        {inr(effectiveProductPrice(heroProduct, now))}
-                      </p>
-                    )}
-                  </div>
-                  {heroProduct && (
-                    <Link
-                      to={`/product/${heroProduct.slug}`}
-                      className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#c6ff00] text-[#111311] transition hover:scale-105"
-                      aria-label={`View ${heroProduct.name}`}
-                    >
-                      <ArrowUpRight className="h-4 w-4" />
-                    </Link>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Categories */}
-      <section className="mt-12">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--accent)]">
-              Collections
-            </p>
-            <h2 className="mt-1.5 text-[clamp(24px,3.4vw,34px)]">
-              Shop by <span className="text-[color:var(--accent)]">Category</span>
-            </h2>
-          </div>
-          <Link
-            to="/shop"
-            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[color:var(--text)] transition hover:text-[color:var(--accent)]"
-          >
-            View all <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          </section>
         </div>
 
-        {categories.length === 0 ? (
-          <div className="glass-soft rounded-2xl px-4 py-8 text-center text-[12.5px] text-[color:var(--muted)]">
-            {loaded ? "Categories appear when products are published." : "Loading the catalogue…"}
-          </div>
-        ) : (
-          <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 lg:grid-cols-6">
-            {categories.map((category, index) => {
-              const preview = categoryPreview(category);
-              const Icon = categoryIcon(category, index);
-              return (
-                <Link
-                  key={category}
-                  to={`/shop?category=${encodeURIComponent(category)}`}
-                  className="cat-card w-[156px] shrink-0 snap-start sm:w-auto"
-                >
-                  <div className="cat-card-media">
-                    {preview?.imageUrl ? (
-                      <img src={preview.imageUrl} alt="" loading="lazy" />
-                    ) : (
-                      <span
-                        className="grid h-14 w-14 place-items-center rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] text-[color:var(--accent)] shadow-sm"
-                        aria-hidden="true"
-                      >
-                        <Icon className="h-6 w-6" />
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between gap-2 px-3.5 py-3">
-                    <span className="truncate text-[12.5px] font-semibold text-[color:var(--heading)]">
-                      {category}
-                    </span>
-                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[color:var(--faint)]" />
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <div className="mt-12">
+        {/* 3D showcase */}
         <Product3DSlider products={products} />
-      </div>
 
-      <PromotionBanner products={products} />
-      <StorePromos />
+        <Testimonials />
 
-      <Testimonials />
-
-      {/* Rewards */}
-      <section className="mt-8 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <div className="relative overflow-hidden rounded-[24px] border border-white/10 bg-[#101310] p-6 text-[#f5f5f0] md:p-8">
-          <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[#c6ff00]/10 blur-3xl" />
-          <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#c6ff00]">
-            <Gift className="h-3.5 w-3.5" /> Rewards programme
-          </span>
-          <h2 className="mt-2.5 text-[clamp(21px,2.8vw,27px)] text-[#f7f8f2]">Partner offers and rewards.</h2>
-          <p className="mt-2 max-w-[440px] text-[12.5px] leading-relaxed text-[#a9afa4]">
-            Browse current offers and their eligibility details. Reward assignments are managed
-            manually by the studio.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-7">
-            <div>
-              <p className="num text-[22px] font-bold text-[#f7f8f2]">{inr(topPrize)}</p>
-              <p className="text-[10.5px] text-[#8f948b]">Top prize</p>
-            </div>
-            <div>
-              <p className="num text-[22px] font-bold text-[#f7f8f2]">{openPrizes.length}</p>
-              <p className="text-[10.5px] text-[#8f948b]">Open prizes</p>
-            </div>
-            <div>
-              <p className="text-[22px] font-bold text-[#f7f8f2]">Manual</p>
-              <p className="text-[10.5px] text-[#8f948b]">Assignment method</p>
-            </div>
-          </div>
-          <Link to="/rewards" className="btn-hero-primary mt-6">
-            How prizes work <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-
-        <div className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface)] p-6 md:p-7">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--accent)]">
-            Why customers come back
-          </p>
-          <h2 className="mt-1.5 text-[20px]">Made to be handled, not just displayed.</h2>
-          <div className="mt-4 grid gap-2.5">
-            {[
-              { title: "Product details", copy: "Review available materials, dimensions and other published specifications." },
-              { title: "Custom projects", copy: "Contact the studio to discuss a part or print not listed in the catalogue." },
-              { title: "Customer ID", copy: "Use the ID issued at checkout to look up your order history." },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="rounded-xl border border-[color:var(--border-soft)] bg-[color:var(--surface-soft)] p-3.5"
-              >
-                <p className="text-[12.5px] font-semibold text-[color:var(--heading)]">{item.title}</p>
-                <p className="mt-0.5 text-[11.5px] leading-relaxed text-[color:var(--muted)]">{item.copy}</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            { icon: Truck, title: "Delivery", copy: "Shipped across Tamil Nadu, tracked to your door." },
+            { icon: ShieldCheck, title: "Quality", copy: "Each print is inspected before it is packed." },
+            { icon: Layers, title: "Made to order", copy: "Small batches printed fresh, never mass produced." },
+          ].map((item) => (
+            <div key={item.title} className="amz-card flex items-start gap-3 p-4">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-[color:var(--surface-soft)] text-[color:var(--accent)]">
+                <item.icon className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-[13.5px] font-bold text-[color:var(--heading)]">{item.title}</p>
+                <p className="mt-0.5 text-[12.5px] leading-relaxed text-[color:var(--muted)]">{item.copy}</p>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
-      </section>
+      </div>
     </div>
   );
 }

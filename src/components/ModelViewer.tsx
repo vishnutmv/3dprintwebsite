@@ -98,11 +98,11 @@ function ModelFallback({ image }: { image?: string }) {
         <span
           aria-hidden
           className="h-24 w-24 rounded-[28px]"
-          style={{ background: "radial-gradient(70% 70% at 35% 25%, #d7ff38, #5f7d00)" }}
+          style={{ background: "radial-gradient(70% 70% at 35% 25%, #ffe98a, #5f7d00)" }}
         />
       )}
       <div className="relative m-4 max-w-[270px] rounded-2xl border border-white/10 bg-[#111311] px-4 py-3 text-center shadow-lg">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#c6ff00]">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#ffd814]">
           3D preview unavailable
         </p>
         <p className="mt-1 text-[11px] leading-relaxed text-[#d6dacf]">

@@ -90,33 +90,41 @@ export function Shop() {
   const hasFilters = Boolean(query) || band !== "all" || activeCategory !== "All";
 
   return (
-    <div className="mx-auto max-w-[1320px] px-4 pb-16 pt-24 md:pt-28">
+    <div className="mx-auto max-w-[1500px] px-3 pb-10 pt-3 sm:px-4">
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[11px] text-[color:var(--faint)]">
         <Link to="/" className="hover:text-[color:var(--text)]">Home</Link>
         <ChevronRight className="h-3 w-3" />
         <span className="text-[color:var(--text)]">Shop</span>
       </nav>
 
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--accent)]">
-            The catalogue
-          </p>
-          <h1 className="mt-1.5 text-[clamp(26px,4vw,38px)]">Shop 3D prints</h1>
-          <p className="mt-1 max-w-xl text-[12.5px] leading-relaxed text-[color:var(--muted)]">
-            Explore our curated collection of high-quality 3D-printed products, made to order.
+          <h1 className="text-[22px] font-bold leading-tight">
+            {activeCategory !== "All" ? activeCategory : "All 3D prints"}
+          </h1>
+          <p className="mt-0.5 text-[12.5px] text-[color:var(--muted)]">
+            {filtered.length === 0
+              ? "No results"
+              : `1-${filtered.length} of ${filtered.length} results`}
+            {query && (
+              <>
+                {" "}for <span className="font-semibold text-[color:var(--accent-strong)]">“{query}”</span>
+              </>
+            )}
           </p>
         </div>
-        <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3.5 py-1.5 text-[11.5px] font-semibold text-[color:var(--muted)]">
-          {filtered.length} {filtered.length === 1 ? "product" : "products"}
-        </span>
+        <p className="max-w-xl text-[12px] leading-relaxed text-[color:var(--muted)]">
+          High-quality prints made to order. Prices include applicable taxes.
+        </p>
       </div>
 
-      <StorePromos />
+      <div className="mt-3">
+        <StorePromos />
+      </div>
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-[236px_1fr]">
-        <aside className="h-fit lg:sticky lg:top-24">
-          <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+      <div className="mt-3 grid gap-4 lg:grid-cols-[240px_1fr]">
+        <aside className="h-fit lg:sticky lg:top-[124px]">
+          <div className="amz-card p-4">
             <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
@@ -215,7 +223,7 @@ export function Shop() {
                     className={cn(
                       "rounded-full border px-2.5 py-1.5 text-[10.5px] font-semibold transition",
                       band === option.id
-                        ? "border-transparent bg-[#c6ff00] text-[#111311]"
+                        ? "border-transparent bg-[#ffd814] text-[#111311]"
                         : "border-[color:var(--border)] text-[color:var(--muted)] hover:border-[color:var(--border-strong)] hover:text-[color:var(--text)]",
                     )}
                   >
@@ -227,7 +235,7 @@ export function Shop() {
             </div>
           </div>
 
-          <div className="mt-3 hidden rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-4 lg:block">
+          <div className="amz-card mt-3 hidden p-4 lg:block">
             <p className="text-[11px] font-semibold text-[color:var(--heading)]">Need something unique?</p>
             <p className="mt-1 text-[11px] leading-relaxed text-[color:var(--muted)]">
               Send the studio a reference and ask about a made-to-order print.
@@ -242,22 +250,15 @@ export function Shop() {
         </aside>
 
         <div className="min-w-0">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[11.5px] text-[color:var(--muted)]">
-              Showing <span className="font-semibold text-[color:var(--text)]">{filtered.length}</span> of{" "}
-              {products.length}
-              {activeCategory !== "All" && (
-                <>
-                  {" "}in <span className="font-semibold text-[color:var(--text)]">{activeCategory}</span>
-                </>
-              )}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2">
+            <p className="text-[12px] text-[color:var(--muted)]">
+              <span className="font-semibold text-[color:var(--text)]">Sort by</span>
             </p>
-            <label className="flex items-center gap-2 text-[11px] text-[color:var(--faint)]">
-              Sort by
+            <label className="flex items-center gap-2 text-[12px] text-[color:var(--muted)]">
               <select
                 value={sort}
                 onChange={(event) => setSort(event.target.value)}
-                className="field h-9 w-auto py-1.5 pr-8 text-[11.5px]"
+                className="cursor-pointer rounded border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-1 text-[12px] text-[color:var(--text)]"
                 aria-label="Sort products"
               >
                 {sorts.map((option) => (
@@ -280,7 +281,7 @@ export function Shop() {
               }
             />
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
               {filtered.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}

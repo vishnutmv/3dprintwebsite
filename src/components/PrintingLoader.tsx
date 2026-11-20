@@ -27,7 +27,7 @@ export function PrintingLoader({
           <defs>
             <linearGradient id="print-object-fill" x1="0" y1="1" x2="0" y2="0">
               <stop offset="0" stopColor="#8fbe00" />
-              <stop offset="0.55" stopColor="#c6ff00" />
+              <stop offset="0.55" stopColor="#ffd814" />
               <stop offset="1" stopColor="#e6ff8a" />
             </linearGradient>
           </defs>
@@ -64,7 +64,7 @@ export function PrintingLoader({
             y1="54"
             x2="140"
             y2="54"
-            stroke="#c6ff00"
+            stroke="#ffd814"
             strokeWidth="2"
             strokeLinecap="round"
           />
@@ -72,12 +72,12 @@ export function PrintingLoader({
           {/* print head + gantry */}
           <g className="print-head">
             <rect x="96" y="42" width="28" height="12" rx="3" fill="#4b5346" />
-            <rect x="104" y="54" width="12" height="6" rx="2" fill="#c6ff00" />
+            <rect x="104" y="54" width="12" height="6" rx="2" fill="#ffd814" />
             <path d="M104 60 110 68 116 60Z" fill="#8fbe00" />
           </g>
 
           {/* status light */}
-          <circle cx="186" cy="29" r="4" fill="#c6ff00">
+          <circle cx="186" cy="29" r="4" fill="#ffd814">
             <animate attributeName="opacity" values="1;0.25;1" dur="1.6s" repeatCount="indefinite" />
           </circle>
         </svg>

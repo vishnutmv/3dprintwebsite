@@ -45,7 +45,7 @@ export function Cart() {
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-24 md:pt-28">
+    <div className="mx-auto max-w-[1200px] px-3 pb-10 pt-4 sm:px-4">
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[11px] text-[color:var(--faint)]">
         <Link to="/" className="hover:text-[color:var(--text)]">Home</Link>
         <ChevronRight className="h-3 w-3" />
@@ -154,7 +154,7 @@ export function Cart() {
 
           <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-4">
             <div className="flex items-center gap-2.5">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#c6ff00] text-[#111311]">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#ffd814] text-[#111311]">
                 <Truck className="h-4 w-4" />
               </span>
               <div className="min-w-0 flex-1">
@@ -163,7 +163,7 @@ export function Cart() {
                 </p>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[color:var(--surface-deep)]">
                   <div
-                    className="h-full rounded-full bg-[#9fd400] transition-all duration-500"
+                    className="h-full rounded-full bg-[#e6b800] transition-all duration-500"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
@@ -172,7 +172,7 @@ export function Cart() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-5 lg:sticky lg:top-24">
+        <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-5 lg:sticky lg:top-[124px]">
           <h2 className="text-[15px]">Order Summary</h2>
 
           <div className="mt-4 space-y-2.5 text-[12.5px]">

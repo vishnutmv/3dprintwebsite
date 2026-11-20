@@ -212,7 +212,7 @@ export function Account() {
   const unreadNotifications = social.unreadCount;
 
   return (
-    <div className="mx-auto max-w-[1100px] px-4 pb-16 pt-24">
+    <div className="mx-auto max-w-[1100px] px-3 pb-10 pt-4 sm:px-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-300">Customer profile</p>

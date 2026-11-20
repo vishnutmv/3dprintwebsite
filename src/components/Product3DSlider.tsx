@@ -98,23 +98,23 @@ function LoadingCover({ name }: { name: string }) {
         className="pointer-events-none absolute inset-0 opacity-60"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(198,255,0,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(198,255,0,.08) 1px, transparent 1px)",
+            "linear-gradient(rgba(255,216,20,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,216,20,.08) 1px, transparent 1px)",
           backgroundSize: "34px 34px",
           maskImage: "radial-gradient(70% 70% at 50% 45%, #000 10%, transparent 78%)",
           WebkitMaskImage: "radial-gradient(70% 70% at 50% 45%, #000 10%, transparent 78%)",
         }}
       />
       <div className="relative w-[74%] max-w-[240px] text-center">
-        <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl border border-[#c6ff00]/30 bg-[#c6ff00]/10 text-[#c6ff00]">
+        <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl border border-[#ffd814]/30 bg-[#ffd814]/10 text-[#ffd814]">
           <Loader2 className="h-5 w-5 animate-spin" />
         </span>
-        <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#c6ff00]">
+        <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#ffd814]">
           Loading 3D model
         </p>
         <p className="mt-1 truncate text-[11.5px] text-[#b9bdb5]">{name}</p>
         <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10">
           <div
-            className="h-full rounded-full bg-[#c6ff00] transition-[width] duration-300"
+            className="h-full rounded-full bg-[#ffd814] transition-[width] duration-300"
             style={{ width: `${percent}%` }}
           />
         </div>
@@ -274,7 +274,7 @@ function ShowcaseSlide({ product, active, onActivate, onDeactivate }: SlideProps
         {/* Top chips */}
         <div className="pointer-events-none absolute left-3 top-3 z-30 flex flex-wrap gap-1.5">
           {onOffer && (
-            <span className="rounded-full bg-[#c6ff00] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#111311]">
+            <span className="rounded-full bg-[#ffd814] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#111311]">
               Offer
             </span>
           )}
@@ -284,7 +284,7 @@ function ShowcaseSlide({ product, active, onActivate, onDeactivate }: SlideProps
             </span>
           )}
           {hasModel && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-[#c6ff00]/35 bg-[#c6ff00]/12 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-[#d7ff38] backdrop-blur">
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#ffd814]/35 bg-[#ffd814]/12 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-[#ffe98a] backdrop-blur">
               <Rotate3d className="h-3 w-3" /> 360°
             </span>
           )}
@@ -295,7 +295,7 @@ function ShowcaseSlide({ product, active, onActivate, onDeactivate }: SlideProps
           <button
             type="button"
             onClick={onActivate}
-            className="absolute bottom-3 right-3 z-30 inline-flex items-center gap-1.5 rounded-full border border-[#c6ff00]/40 bg-[#0b0e0b]/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#d7ff38] backdrop-blur sm:hidden"
+            className="absolute bottom-3 right-3 z-30 inline-flex items-center gap-1.5 rounded-full border border-[#ffd814]/40 bg-[#0b0e0b]/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#ffe98a] backdrop-blur sm:hidden"
           >
             <Maximize2 className="h-3 w-3" /> Load 3D
           </button>
@@ -332,7 +332,7 @@ function ShowcaseSlide({ product, active, onActivate, onDeactivate }: SlideProps
           </p>
           <Link
             to={`/product/${product.slug}`}
-            className="mt-0.5 block truncate text-[13.5px] font-semibold text-[#f7f8f2] hover:text-[#c6ff00]"
+            className="mt-0.5 block truncate text-[13.5px] font-semibold text-[#f7f8f2] hover:text-[#ffd814]"
           >
             {product.name}
           </Link>
@@ -349,7 +349,7 @@ function ShowcaseSlide({ product, active, onActivate, onDeactivate }: SlideProps
           type="button"
           onClick={add}
           disabled={product.stock <= 0}
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#c6ff00] text-[#111311] transition hover:bg-[#d7ff38] disabled:cursor-not-allowed disabled:opacity-40"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#ffd814] text-[#111311] transition hover:bg-[#ffe98a] disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={`Add ${product.name} to cart`}
           title="Add to cart"
         >
@@ -432,16 +432,16 @@ export function Product3DSlider({ products }: { products: Product[] }) {
   if (products.length === 0) return null;
 
   return (
-    <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(150deg,#141812_0%,#0b0e0b_62%)] px-4 pb-5 pt-6 text-[#f5f5f0] sm:px-6 sm:pb-6 sm:pt-7 md:px-8">
-      <div className="pointer-events-none absolute -right-24 -top-28 h-64 w-64 rounded-full bg-[#c6ff00]/10 blur-3xl" />
+    <section className="relative overflow-hidden rounded-lg border border-white/10 bg-[linear-gradient(150deg,#1a2430_0%,#0f1418_62%)] px-4 pb-5 pt-6 text-[#f5f5f0] sm:px-6 sm:pb-6 sm:pt-7 md:px-8">
+      <div className="pointer-events-none absolute -right-24 -top-28 h-64 w-64 rounded-full bg-[#ffd814]/10 blur-3xl" />
 
       <div className="relative flex flex-wrap items-end justify-between gap-3">
         <div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#c6ff00]/25 bg-[#c6ff00]/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.18em] text-[#d7ff38]">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#ffd814]/25 bg-[#ffd814]/10 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.18em] text-[#ffe98a]">
             <Rotate3d className="h-3 w-3" /> Live 3D showcase
           </span>
           <h2 className="mt-2.5 text-[clamp(22px,3.2vw,32px)] text-[#f7f8f2]">
-            Featured prints, <span className="text-[#c6ff00]">in 360°</span>
+            Featured prints, <span className="text-[#ffd814]">in 360°</span>
           </h2>
           <p className="mt-1 max-w-[440px] text-[12px] leading-relaxed text-[#a9afa4]">
             Hover a print to load its 3D model in place. Drag to spin it, scroll or pinch to
@@ -452,7 +452,7 @@ export function Product3DSlider({ products }: { products: Product[] }) {
         <div className="flex items-center gap-2">
           <Link
             to="/shop"
-            className="hidden items-center gap-1.5 rounded-xl border border-white/15 px-3.5 py-2 text-[11.5px] font-semibold text-[#e8ebe3] transition hover:border-[#c6ff00]/50 hover:text-white sm:inline-flex"
+            className="hidden items-center gap-1.5 rounded-xl border border-white/15 px-3.5 py-2 text-[11.5px] font-semibold text-[#e8ebe3] transition hover:border-[#ffd814]/50 hover:text-white sm:inline-flex"
           >
             View all <ArrowRight className="h-3.5 w-3.5" />
           </Link>
@@ -460,7 +460,7 @@ export function Product3DSlider({ products }: { products: Product[] }) {
             type="button"
             onClick={() => scrollBySlide(-1)}
             disabled={edges.start}
-            className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-[#e8ebe3] transition hover:border-[#c6ff00]/50 hover:bg-white/5 disabled:opacity-30"
+            className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-[#e8ebe3] transition hover:border-[#ffd814]/50 hover:bg-white/5 disabled:opacity-30"
             aria-label="Previous products"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -469,7 +469,7 @@ export function Product3DSlider({ products }: { products: Product[] }) {
             type="button"
             onClick={() => scrollBySlide(1)}
             disabled={edges.end}
-            className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-[#e8ebe3] transition hover:border-[#c6ff00]/50 hover:bg-white/5 disabled:opacity-30"
+            className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-[#e8ebe3] transition hover:border-[#ffd814]/50 hover:bg-white/5 disabled:opacity-30"
             aria-label="Next products"
           >
             <ChevronRight className="h-4 w-4" />
@@ -509,14 +509,14 @@ export function Product3DSlider({ products }: { products: Product[] }) {
                 aria-label={`Go to ${product.name}`}
                 aria-current={page === index}
                 className={`h-1.5 rounded-full transition-all ${
-                  page === index ? "w-6 bg-[#c6ff00]" : "w-1.5 bg-white/25 hover:bg-white/50"
+                  page === index ? "w-6 bg-[#ffd814]" : "w-1.5 bg-white/25 hover:bg-white/50"
                 }`}
               />
             ))}
           </div>
           <Link
             to="/shop"
-            className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-[#c6ff00] sm:hidden"
+            className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-[#ffd814] sm:hidden"
           >
             View all <ArrowRight className="h-3.5 w-3.5" />
           </Link>

@@ -93,7 +93,7 @@ export function ProductDetail() {
   };
 
   return (
-    <div className="mx-auto max-w-[1320px] px-4 pb-28 pt-24 md:pt-28 lg:pb-16">
+    <div className="mx-auto max-w-[1500px] px-3 pb-28 pt-3 sm:px-4 lg:pb-12">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-[11px] text-[color:var(--faint)]">
         <Link to="/" className="hover:text-[color:var(--text)]">Home</Link>
         <ChevronRight className="h-3 w-3" />
@@ -111,13 +111,13 @@ export function ProductDetail() {
 
       <div className="mt-4 grid gap-5 lg:grid-cols-[1.02fr_0.98fr] lg:items-start">
         {/* Media / viewer */}
-        <div className="lg:sticky lg:top-24">
-          <div className="overflow-hidden rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface)]">
+        <div className="lg:sticky lg:top-[124px]">
+          <div className="overflow-hidden rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)]">
             <div
               ref={mediaRef}
               className="relative grid h-[340px] place-items-center overflow-hidden bg-[color:var(--surface-soft)] sm:h-[430px] lg:h-[500px]"
             >
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_80%_at_50%_0%,rgba(198,255,0,.14),transparent_65%)]" />
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_80%_at_50%_0%,rgba(231,240,243,.7),transparent_65%)]" />
               {activeMediaView === "video" && product.videoUrl ? (
                 <video
                   src={product.videoUrl}
@@ -137,7 +137,7 @@ export function ProductDetail() {
                 <ModelViewer product={product} className="relative h-full w-full" />
               )}
 
-              <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-[#111311] px-3 py-1.5 text-[9.5px] font-bold uppercase tracking-[0.14em] text-[#c6ff00]">
+              <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-[#565959] shadow-sm">
                 <Box className="h-3 w-3" />
                 {product.modelUrl ? "Uploaded model" : "Studio preview"}
               </span>
@@ -155,7 +155,7 @@ export function ProductDetail() {
                     }}
                     className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition ${
                       activeMediaView === "image" && activeImage === index
-                        ? "border-[#c6ff00]"
+                        ? "border-[#ffa41c]"
                         : "border-transparent opacity-70 hover:opacity-100"
                     }`}
                     aria-label={`Show image ${index + 1}`}
@@ -169,7 +169,7 @@ export function ProductDetail() {
                     onClick={() => setActiveMedia("video")}
                     className={`grid h-16 w-16 shrink-0 place-items-center rounded-xl border-2 transition ${
                       activeMedia === "video"
-                        ? "border-[#c6ff00] bg-[color:var(--surface-deep)] text-[color:var(--heading)]"
+                        ? "border-[#ffa41c] bg-[color:var(--surface-deep)] text-[color:var(--heading)]"
                         : "border-transparent bg-[color:var(--surface-soft)] text-[color:var(--muted)]"
                     }`}
                     aria-label="Play product video"
@@ -183,7 +183,7 @@ export function ProductDetail() {
                     onClick={() => setActiveMedia("model")}
                     className={`grid h-16 w-16 shrink-0 place-items-center rounded-xl border-2 transition ${
                       activeMediaView === "model"
-                        ? "border-[#c6ff00] bg-[color:var(--surface-deep)] text-[color:var(--heading)]"
+                        ? "border-[#ffa41c] bg-[color:var(--surface-deep)] text-[color:var(--heading)]"
                         : "border-transparent bg-[color:var(--surface-soft)] text-[color:var(--muted)]"
                     }`}
                     aria-label="View 3D model"
@@ -215,10 +215,10 @@ export function ProductDetail() {
 
         {/* Info */}
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[color:var(--accent)]">
+          <p className="text-[12.5px] font-medium text-[color:var(--accent)]">
             {product.category}
           </p>
-          <h1 className="mt-2 text-[clamp(26px,3.8vw,40px)] leading-[1.04]">{product.name}</h1>
+          <h1 className="mt-1 text-[clamp(22px,3.2vw,32px)] font-bold leading-[1.15]">{product.name}</h1>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[12px] text-[color:var(--muted)]">
             <span className="flex items-center gap-1">
@@ -242,8 +242,8 @@ export function ProductDetail() {
               </span>
             )}
             {onOffer && (
-              <span className="rounded-full bg-[#c6ff00] px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.1em] text-[#111311]">
-                Offer
+              <span className="rounded-sm bg-[#cc0c39] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.06em] text-white">
+                Deal
               </span>
             )}
           </div>
@@ -306,7 +306,7 @@ export function ProductDetail() {
               type="button"
               disabled={product.stock <= 0}
               onClick={buyNow}
-              className="btn-glass flex-1 py-3.5"
+              className="btn-buy flex-1 py-3.5"
             >
               Buy Now
             </button>

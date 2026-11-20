@@ -164,7 +164,7 @@ export function RewardReveal() {
   };
 
   return (
-    <div className="mx-auto max-w-xl px-4 pb-16 pt-28">
+    <div className="mx-auto max-w-xl px-3 pb-10 pt-4 sm:px-4">
       <div className="glass overflow-hidden rounded-3xl p-6 text-center sm:p-9">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-violet-400/10 text-violet-200">
           {reward ? <Sparkles className="h-7 w-7" /> : <Gift className="h-7 w-7" />}

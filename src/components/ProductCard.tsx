@@ -1,11 +1,11 @@
 /**
- * Product card — catalogue tile with favourite control, live price and a
- * compact add-to-cart action that flies the product image to the header cart.
+ * Product card — Amazon-style catalogue tile: image, two-line title, rating,
+ * price with discount, delivery line and a yellow add-to-cart action.
  */
 
 import { useRef } from "react";
 import { Link } from "react-router-dom";
-import { Box, Heart, Plus } from "lucide-react";
+import { Heart, Star } from "lucide-react";
 import { inr } from "@/lib/format";
 import { flyToCart } from "@/lib/cart-fly";
 import { useAccount } from "@/lib/account";
@@ -15,10 +15,31 @@ import { effectiveProductPrice, promotionState, usePromotionClock } from "@/lib/
 import { useStore } from "@/lib/store";
 import type { Product } from "@/lib/types";
 
+function RatingStars({ rating, reviews }: { rating: number; reviews: number }) {
+  const rounded = Math.round(rating * 2) / 2;
+  return (
+    <span className="flex items-center gap-1 text-[12px]">
+      <span className="flex items-center" aria-label={`${rating.toFixed(1)} out of 5 stars`}>
+        {[1, 2, 3, 4, 5].map((value) => (
+          <Star
+            key={value}
+            className="h-3.5 w-3.5"
+            strokeWidth={0}
+            fill={value <= rounded ? "#de7921" : "#d5d9d9"}
+          />
+        ))}
+      </span>
+      <span className="num font-medium text-[#007185] hover:text-[#c7511f]">{reviews}</span>
+    </span>
+  );
+}
+
 export function ProductCard({ product }: { product: Product }) {
   const now = usePromotionClock();
   const price = effectiveProductPrice(product, now);
   const onOffer = promotionState(product, now) === "active";
+  const original = onOffer ? product.price : product.mrp;
+  const discount = original && original > price ? Math.round((1 - price / original) * 100) : 0;
   const customer = useAccount((state) => state.customer);
   const isFavorite = useSocial((state) => state.favorites.includes(product.id));
   const toggleFavorite = useSocial((state) => state.toggleFavorite);
@@ -43,7 +64,7 @@ export function ProductCard({ product }: { product: Product }) {
   };
 
   return (
-    <article className="product-card group">
+    <article className="product-card h-full">
       <div className="relative">
         <Link to={`/product/${product.slug}`} className="block" aria-label={`View ${product.name}`}>
           <div ref={mediaRef} className="product-media">
@@ -57,10 +78,10 @@ export function ProductCard({ product }: { product: Product }) {
                   aria-hidden="true"
                 />
                 <div
-                  className="relative h-20 w-20 rounded-[26%] transition-transform duration-500 group-hover:scale-105 group-hover:rotate-3"
+                  className="relative h-20 w-20 rounded-[26%] transition-transform duration-500 group-hover:scale-105"
                   style={{
                     background: `linear-gradient(150deg, ${product.accent}, ${product.accent}77)`,
-                    boxShadow: `inset 0 2px 0 rgba(255,255,255,.5), inset 0 -16px 26px rgba(0,0,0,.12), 0 24px 38px -18px ${product.accent}`,
+                    boxShadow: `inset 0 2px 0 rgba(255,255,255,.5), inset 0 -16px 26px rgba(0,0,0,.12)`,
                   }}
                 >
                   <span className="absolute inset-x-4 bottom-3 h-px rounded bg-white/45" />
@@ -69,19 +90,19 @@ export function ProductCard({ product }: { product: Product }) {
               </div>
             )}
 
-            <div className="absolute left-3 top-3 flex flex-col items-start gap-1">
-              {onOffer && (
-                <span className="rounded-full bg-[#111311] px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-[#c6ff00]">
-                  Offer
+            <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
+              {discount > 0 && (
+                <span className="rounded-sm bg-[#cc0c39] px-1.5 py-0.5 text-[11px] font-bold text-white">
+                  -{discount}%
                 </span>
               )}
               {product.badge && (
-                <span className="rounded-full bg-[#c6ff00] px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-[#111311]">
+                <span className="rounded-sm bg-[#ffd814] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[#0f1111]">
                   {product.badge}
                 </span>
               )}
               {product.trendTag && (
-                <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-[color:var(--text)]">
+                <span className="rounded-sm bg-[#f7f8f8] px-1.5 py-0.5 text-[10px] font-bold text-[#565959]">
                   {product.trendTag}
                 </span>
               )}
@@ -93,10 +114,10 @@ export function ProductCard({ product }: { product: Product }) {
           <button
             type="button"
             onClick={() => void save()}
-            className={`absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full border shadow-sm backdrop-blur transition ${
+            className={`absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full border shadow-sm transition ${
               isFavorite
-                ? "border-transparent bg-[#c6ff00] text-[#111311]"
-                : "border-[color:var(--border)] bg-[color:var(--surface)] text-[color:var(--muted)] hover:text-[color:var(--heading)]"
+                ? "border-[#ffa41c] bg-[#fff3e0] text-[#c45500]"
+                : "border-[color:var(--border)] bg-white/90 text-[#565959] hover:text-[#c45500]"
             }`}
             aria-label={isFavorite ? `Remove ${product.name} from favourites` : `Add ${product.name} to favourites`}
             title={isFavorite ? "Remove from favourites" : "Add to favourites"}
@@ -104,61 +125,43 @@ export function ProductCard({ product }: { product: Product }) {
             <Heart className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`} />
           </button>
         )}
-
-        <span className="pointer-events-none absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-2 py-1 text-[9px] font-semibold text-[color:var(--muted)]">
-          <Box className="h-3 w-3" /> 3D
-        </span>
       </div>
 
-      <div className="flex flex-1 flex-col p-3.5 sm:p-4">
-        <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-[9.5px] font-bold uppercase tracking-[0.16em] text-[color:var(--faint)]">
-            {product.category}
-          </p>
-          <span className="flex shrink-0 items-center gap-1 text-[10.5px] font-medium text-[color:var(--muted)]">
-            <span className="text-[#b98a12]">★</span>
-            {product.rating.toFixed(1)}
-            <span className="text-[color:var(--faint)]">({product.reviews})</span>
-          </span>
-        </div>
-
-        <Link to={`/product/${product.slug}`} className="mt-1.5 block">
-          <h3 className="line-clamp-1 text-[14px] font-semibold text-[color:var(--heading)] transition hover:text-[color:var(--accent)]">
-            {product.name}
-          </h3>
+      <div className="flex flex-1 flex-col p-3">
+        <Link to={`/product/${product.slug}`} className="block">
+          <h3 className="product-title">{product.name}</h3>
         </Link>
 
-        <p className="mt-1 line-clamp-1 text-[10.5px] text-[color:var(--faint)]">
-          {product.material}
-          {product.dimensions ? ` · ${product.dimensions}` : ""}
-        </p>
-
-        <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-          <div className="min-w-0">
-            <p className="product-price num text-[16px]">
-              {inr(price)}
-            </p>
-            {(onOffer ? product.price : product.mrp) && (
-              <p className="num text-[10.5px] text-[color:var(--faint)] line-through">
-                {inr(onOffer ? product.price : product.mrp ?? product.price)}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={add}
-            disabled={product.stock <= 0}
-            className="add-cart-fab"
-            aria-label={product.stock > 0 ? `Add ${product.name} to cart` : `${product.name} is out of stock`}
-            title={product.stock > 0 ? "Add to cart" : "Out of stock"}
-          >
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-          </button>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <RatingStars rating={product.rating} reviews={product.reviews} />
         </div>
 
-        <p className="mt-1.5 text-[10px] text-[color:var(--faint)]">
-          {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
+          <span className="product-price num text-[18px]">{inr(price)}</span>
+          {discount > 0 && original && (
+            <span className="num text-[12px] text-[#565959] line-through">{inr(original)}</span>
+          )}
+        </div>
+
+        <p className="mt-1 text-[11.5px] leading-snug text-[#565959]">
+          {product.stock > 0 ? (
+            <>
+              <span className="font-semibold text-[#0f1111]">FREE delivery</span> on qualifying orders
+            </>
+          ) : (
+            <span className="font-semibold text-[#b12704]">Currently unavailable</span>
+          )}
         </p>
+
+        <button
+          type="button"
+          onClick={add}
+          disabled={product.stock <= 0}
+          className="add-cart-fab mt-2.5 w-full"
+          aria-label={product.stock > 0 ? `Add ${product.name} to cart` : `${product.name} is out of stock`}
+        >
+          {product.stock > 0 ? "Add to cart" : "Out of stock"}
+        </button>
       </div>
     </article>
   );

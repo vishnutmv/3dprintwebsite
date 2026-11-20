@@ -8,12 +8,12 @@ import type { ReactNode } from "react";
 import { Check } from "lucide-react";
 
 const confetti = [
-  { left: "18%", top: "24%", dx: "-26px", dy: "74px", color: "#c6ff00", delay: "0.55s" },
+  { left: "18%", top: "24%", dx: "-26px", dy: "74px", color: "#ffd814", delay: "0.55s" },
   { left: "30%", top: "18%", dx: "18px", dy: "66px", color: "#f5f5f0", delay: "0.7s" },
-  { left: "58%", top: "20%", dx: "-14px", dy: "88px", color: "#c6ff00", delay: "0.62s" },
+  { left: "58%", top: "20%", dx: "-14px", dy: "88px", color: "#ffd814", delay: "0.62s" },
   { left: "71%", top: "26%", dx: "28px", dy: "70px", color: "#8fbe00", delay: "0.8s" },
   { left: "83%", top: "32%", dx: "12px", dy: "92px", color: "#f5f5f0", delay: "0.68s" },
-  { left: "44%", top: "16%", dx: "-32px", dy: "60px", color: "#d7ff38", delay: "0.75s" },
+  { left: "44%", top: "16%", dx: "-32px", dy: "60px", color: "#ffe98a", delay: "0.75s" },
 ];
 
 export function PrintSuccess({
@@ -49,7 +49,7 @@ export function PrintSuccess({
           <Check className="h-8 w-8" strokeWidth={3} />
         </div>
 
-        <p className="mt-4 text-[9.5px] font-bold uppercase tracking-[0.24em] text-[#c6ff00]">
+        <p className="mt-4 text-[9.5px] font-bold uppercase tracking-[0.24em] text-[#ffd814]">
           Print complete
         </p>
         <h1 id="order-success-title" className="mt-2 text-[clamp(22px,4vw,30px)] text-[#f7f8f2]">

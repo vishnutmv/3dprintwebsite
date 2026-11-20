@@ -296,7 +296,7 @@ export function AdminLayout() {
                     : item.to === "/admin/leads" && newLeadCount > 0
                     ? "border border-sun/20 bg-sun/[0.08] text-sun"
                     : isActive
-                    ? "bg-[#c6ff00] font-semibold text-[#111311] shadow-[0_10px_22px_-14px_rgba(160,210,0,.9)]"
+                    ? "bg-[#ffd814] font-semibold text-[#111311] shadow-[0_10px_22px_-14px_rgba(160,210,0,.9)]"
                     : "text-[#a9afa4] hover:bg-white/[0.06] hover:text-white",
                 )
               }
@@ -402,7 +402,7 @@ export function AdminLayout() {
                     ? "animate-pulse bg-coral/[0.08] text-coral"
                     : item.to === "/admin/leads" && newLeadCount > 0
                     ? "bg-sun/[0.08] text-sun"
-                    : isActive ? "bg-[#111311] font-semibold text-[#c6ff00]" : "text-[color:var(--muted)]",
+                    : isActive ? "bg-[#111311] font-semibold text-[#ffd814]" : "text-[color:var(--muted)]",
                 )
               }
             >

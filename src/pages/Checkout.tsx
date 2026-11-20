@@ -225,7 +225,7 @@ export function Checkout() {
   };
 
   return (
-    <div className="mx-auto max-w-[1100px] px-4 pb-16 pt-24">
+    <div className="mx-auto max-w-[1100px] px-3 pb-10 pt-4 sm:px-4">
       <h1 className="text-[clamp(24px,3.4vw,32px)]">Checkout</h1>
       <p className="mt-1 text-[12.5px] text-white/45">
         {demoMode

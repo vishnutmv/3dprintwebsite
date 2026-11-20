@@ -5,40 +5,44 @@ export default {
     extend: {
       colors: {
         ink: {
-          950: "#111311",
-          900: "#171917",
-          800: "#1e211d",
-          700: "#2a2e28",
+          950: "#0f1111",
+          900: "#131921",
+          800: "#232f3e",
+          700: "#37475a",
         },
-        // Kept under the original name so existing components adapt together.
+        // Kept under the original names so existing components adapt together.
+        // These now carry the Amazon-style action colours.
         violet: {
-          400: "#c6ff00",
-          500: "#b2e800",
-          600: "#9ecf00",
+          400: "#febd69",
+          500: "#f3a847",
+          600: "#e08e1b",
         },
         lime: {
-          300: "#d7ff38",
-          400: "#c6ff00",
-          500: "#a8d900",
-          600: "#7f9f00",
+          300: "#ffe98a",
+          400: "#ffd814",
+          500: "#f7ca00",
+          600: "#e6b800",
         },
-        coral: "#c2452f",
-        sun: "#a87716",
-        mint: "#2f7d5c",
+        coral: "#cc0c39",
+        sun: "#c45500",
+        mint: "#067d62",
       },
       fontFamily: {
-        sans: ['"Segoe UI Variable"', "Inter", "system-ui", "-apple-system", "Segoe UI", "Arial", "sans-serif"],
-        display: ['"Segoe UI Variable Display"', "Inter", "system-ui", "sans-serif"],
-        mono: ['"Cascadia Mono"', "Consolas", "monospace"],
+        sans: ["Amazon Ember", "Inter", "Arial", "Helvetica Neue", "system-ui", "sans-serif"],
+        display: ["Amazon Ember", "Inter", "Arial", "Helvetica Neue", "system-ui", "sans-serif"],
+        mono: ["Consolas", "ui-monospace", "monospace"],
       },
       borderRadius: {
-        "4xl": "2rem",
+        xl: "6px",
+        "2xl": "8px",
+        "3xl": "8px",
+        "4xl": "10px",
       },
       boxShadow: {
-        glass: "0 18px 44px -28px rgba(17,19,17,.24), inset 0 1px 0 rgba(255,255,255,.8)",
-        glow: "0 0 0 1px rgba(198,255,0,.28), 0 16px 42px -20px rgba(150,200,0,.45)",
-        lift: "0 28px 60px -34px rgba(17,19,17,.35)",
-        lime: "0 14px 34px -16px rgba(140,190,0,.55)",
+        glass: "0 1px 2px rgba(15,23,25,.06)",
+        glow: "0 0 0 3px rgba(255,216,20,.35)",
+        lift: "0 4px 14px -6px rgba(15,23,25,.18)",
+        lime: "0 2px 6px rgba(15,23,25,.14)",
       },
       keyframes: {
         drift: {

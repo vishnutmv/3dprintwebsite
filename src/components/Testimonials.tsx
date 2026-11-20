@@ -23,22 +23,23 @@ export function Testimonials() {
   if (reviews.length === 0) return null;
 
   return (
-    <section className="mt-12">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <section className="amz-card p-4 sm:p-5">
+      <div className="amz-row-head mb-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-violet-300">Testimonials</p>
-          <h2 className="mt-1.5 text-[clamp(22px,3vw,30px)]">Loved by the studio community</h2>
-          <p className="mt-1 text-[12.5px] text-white/45">
+          <h2 className="amz-section-title">Customer reviews</h2>
+          <p className="mt-1 text-[12.5px] text-[color:var(--muted)]">
             Real ratings and comments from customers. Sign in to join the conversation.
           </p>
         </div>
-        <Link to="/shop" className="btn-glass btn-sm text-[12px]">Shop rated prints</Link>
+        <Link to="/shop" className="amz-link hidden shrink-0 text-[13px] sm:block">
+          Shop rated prints
+        </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         {reviews.slice(0, 3).map((review) => (
-          <figure key={review.id} className="glass flex flex-col rounded-2xl p-5">
-            <Quote className="h-5 w-5 text-violet-300" />
+          <figure key={review.id} className="flex flex-col rounded-md border border-[color:var(--border)] p-4">
+            <Quote className="h-5 w-5 text-[color:var(--accent)]" />
             <Stars value={review.rating ?? 0} className="mt-3 h-4 w-4" />
             {review.title && <p className="mt-2 text-[13px] font-semibold text-white">{review.title}</p>}
             <blockquote className="mt-1.5 line-clamp-4 text-[12.5px] leading-relaxed text-white/55">

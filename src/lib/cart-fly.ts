@@ -41,7 +41,7 @@ export function flyToCart(source: HTMLElement | null, imageUrl?: string) {
     imageUrl ||
     "data:image/svg+xml;charset=utf-8," +
       encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2b312a"/><stop offset="1" stop-color="#111311"/></linearGradient></defs><rect width="80" height="80" rx="18" fill="url(#g)"/><path d="M40 18 57 27v18L40 54 23 45V27l17-9Z" fill="none" stroke="#c6ff00" stroke-width="2.4"/></svg>',
+        '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2b312a"/><stop offset="1" stop-color="#111311"/></linearGradient></defs><rect width="80" height="80" rx="18" fill="url(#g)"/><path d="M40 18 57 27v18L40 54 23 45V27l17-9Z" fill="none" stroke="#ffd814" stroke-width="2.4"/></svg>',
       );
   node.alt = "";
   node.setAttribute("aria-hidden", "true");
